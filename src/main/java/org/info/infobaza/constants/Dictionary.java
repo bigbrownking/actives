@@ -3,11 +3,9 @@ package org.info.infobaza.constants;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
-import lombok.experimental.UtilityClass;
 import org.info.infobaza.dto.response.info.ServiceSources;
 import org.info.infobaza.service.AbstractService;
 import org.info.infobaza.service.ServiceMetadata;
-import org.info.infobaza.util.ServiceMetadataCollector;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
@@ -17,14 +15,13 @@ import java.util.*;
 @Component
 @RequiredArgsConstructor
 public final class Dictionary {
-    private final ServiceMetadataCollector serviceMetadataCollector;
-
     private static Map<String, List<Method>> incomeMethodsBySource = new HashMap<>();
     private static Map<String, List<Method>> activeMethodsBySource = new HashMap<>();
     private static Map<String, AbstractService> serviceBeans = new HashMap<>();
 
 
     private final ApplicationContext applicationContext;
+    private final ServiceSources serviceSources = getDistinctSources();
 
     public static final List<String> VID_INCOME = List.of("Доход по данным ЕНПФ", "Доход ИП", "СГД ЮЛ", "Доход по данным ФНО", "Денежные средства",
             "в.т.ч. Доход от ИП", "в.т.ч. Доход из источников за пределами РК", "в.т.ч. Имущественный доход",
@@ -47,11 +44,44 @@ public final class Dictionary {
             "Коммунальные платежи", "Вместе жили и коммунальные платежи"
     );
 
-    public ServiceSources get(){
-        return serviceMetadataCollector.getDistinctSources();
+
+    private ServiceSources getDistinctSources() {
+        Set<String> incomeSources = new HashSet<>();
+        Set<String> activeSources = new HashSet<>();
+        Set<String> activeTypes = new HashSet<>();
+        Set<String> activeVids = new HashSet<>();
+        Set<String> incomeVids = new HashSet<>();
+
+        Map<String, AbstractService> serviceBeans = applicationContext.getBeansOfType(AbstractService.class);
+
+        for (AbstractService service : serviceBeans.values()) {
+            Method[] methods = service.getClass().getDeclaredMethods();
+            for (Method method : methods) {
+                ServiceMetadata annotation = method.getAnnotation(ServiceMetadata.class);
+                if (annotation != null) {
+                    String source = annotation.source().length > 0 ? annotation.source()[0] : "";
+
+                    if (annotation.isActive()) {
+                        activeSources.add(source);
+                        activeTypes.addAll(Arrays.asList(annotation.type()));
+                        activeVids.addAll(Arrays.asList(annotation.vids()));
+                    }
+                    if (annotation.isIncome()) {
+                        incomeSources.add(source);
+                        incomeVids.addAll(Arrays.asList(annotation.vids()));
+                    }
+                }
+            }
+        }
+
+        return new ServiceSources(
+                new ArrayList<>(incomeSources),
+                new ArrayList<>(activeSources),
+                new ArrayList<>(activeTypes),
+                new ArrayList<>(activeVids),
+                new ArrayList<>(incomeVids)
+        );
     }
-
-
 
 
     @PostConstruct
@@ -90,18 +120,18 @@ public final class Dictionary {
     }
 
     public List<String> getVidIncome(){
-        return serviceMetadataCollector.getDistinctSources().getIncomeVids();
+        return serviceSources.getIncomeVids();
     }
     public List<String> getVidActive(){
-        return serviceMetadataCollector.getDistinctSources().getActiveVids();
+        return serviceSources.getActiveVids();
     }
     public List<String> getSourcesActive(){
-        return serviceMetadataCollector.getDistinctSources().getActiveSources();
+        return serviceSources.getActiveSources();
     }
     public List<String> getSourcesIncome(){
-        return serviceMetadataCollector.getDistinctSources().getIncomeSources();
+        return serviceSources.getIncomeSources();
     }
     public List<String> getTypesActives(){
-        return serviceMetadataCollector.getDistinctSources().getActiveTypes();
+        return serviceSources.getActiveTypes();
     }
 }
