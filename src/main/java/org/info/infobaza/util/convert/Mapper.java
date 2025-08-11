@@ -1,11 +1,16 @@
 package org.info.infobaza.util.convert;
 
 import lombok.extern.slf4j.Slf4j;
-import org.info.infobaza.model.info.*;
 import org.info.infobaza.model.info.active_income.ActiveOverall;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
 import org.info.infobaza.model.info.active_income.EsfOverall;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
+import org.info.infobaza.model.info.job.CompanyRecord;
+import org.info.infobaza.model.info.job.StatusRecord;
+import org.info.infobaza.model.info.job.SupervisorRecord;
+import org.info.infobaza.model.info.person.NominalFiz;
+import org.info.infobaza.model.info.person.PersonRecord;
+import org.info.infobaza.model.info.person.RelationRecord;
 import org.springframework.stereotype.Component;
 
 import java.sql.ResultSet;

@@ -1,4 +1,4 @@
-package org.info.infobaza.model.info;
+package org.info.infobaza.model.info.person;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

@@ -2,7 +2,7 @@ package org.info.infobaza.util.convert;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.info.infobaza.model.info.RelationRecord;
+import org.info.infobaza.model.info.person.RelationRecord;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.service.central_depository.CentralDepositaryService;
@@ -224,7 +224,6 @@ public class Fetcher {
         return esfInformationRecords.stream().distinct().collect(Collectors.toList());
     }
     public static List<RelationRecord> keepDistinctRelations(List<RelationRecord> relationRecords) {
-        return relationRecords.stream().distinct()
-                .collect(Collectors.toList());
+        return relationRecords.stream().distinct().collect(Collectors.toList());
     }
 }

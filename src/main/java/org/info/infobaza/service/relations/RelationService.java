@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.constants.Dictionary;
 import org.info.infobaza.dto.response.relation.RelationActive;
 import org.info.infobaza.dto.response.relation.RelationActiveWithTypes;
-import org.info.infobaza.model.info.RelationRecord;
+import org.info.infobaza.model.info.person.RelationRecord;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.constants.QueryLocationDictionary;

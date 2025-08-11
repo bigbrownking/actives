@@ -4,9 +4,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
-import org.info.infobaza.model.info.CompanyRecord;
+import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.active_income.EsfOverall;
-import org.info.infobaza.model.info.SupervisorRecord;
+import org.info.infobaza.model.info.job.SupervisorRecord;
 
 import java.util.List;
 

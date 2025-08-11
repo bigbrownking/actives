@@ -31,7 +31,6 @@ public class LogService {
         String uri = request.getRequestURI();
         String queryString = request.getQueryString() != null ? "?" + request.getQueryString() : "";
 
-        // Process request arguments with @Loggable annotation
         String requestParams = Arrays.stream(joinPoint.getArgs())
                 .map(arg -> {
                     if (arg == null) {

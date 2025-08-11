@@ -1,4 +1,4 @@
-package org.info.infobaza.dto.response.info;
+package org.info.infobaza.dto.response.info.yearlyCounts;
 
 import lombok.Builder;
 import lombok.Data;
