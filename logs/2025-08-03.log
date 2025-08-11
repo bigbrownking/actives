@@ -1,0 +1,1 @@
+2025-08-04 09:56:25.309 INFO  org.info.infobaza.util.logging.LogService - 2025-08-03 09:55:54.696 - Request: Controller: InformationController, Method: getAllActivesOfPerson, HTTP: POST, URI: /info/active, Args: [iin="831128300547", dateFrom="2000-01-01", dateTo="2025-12-12", years="[2015, 2022]", sources="null", types="null", iins="null"], ExecutionTime: 86430613ms

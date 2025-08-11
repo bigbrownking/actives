@@ -1,0 +1,20 @@
+package org.info.infobaza.dto.response.info.active;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
+import org.info.infobaza.model.info.active_income.RecordDt;
+
+import java.util.List;
+import java.util.Map;
+
+@Getter
+@Setter
+@Builder
+public class ActiveWithRecords implements ActiveResponse{
+    private String dateFrom;
+    private String dateTo;
+    private List<String> selectedYears;
+    private Map<String, List<RecordDt>> recordsByOper;
+    private Map<String, List<String>> iinToRelation;
+}
