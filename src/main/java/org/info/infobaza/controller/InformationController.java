@@ -73,28 +73,28 @@ public class InformationController {
 
     @GetMapping("/sourcesIncome")
     public ResponseEntity<List<String>> getAllSourcesIncome(){
-        return ResponseEntity.ok(Dictionary.SOURCES_INCOME);
+        return ResponseEntity.ok(dictionary.getSourcesIncome());
     }
 
     @GetMapping("/vidIncome")
     public ResponseEntity<List<String>> getAllVidIncome(){
-        return ResponseEntity.ok(Dictionary.VID_INCOME);
+        return ResponseEntity.ok(dictionary.getVidIncome());
     }
 
 
     @GetMapping("/sourcesActive")
     public ResponseEntity<List<String>> getAllSourcesActive(){
-        return ResponseEntity.ok(Dictionary.SOURCES_ACTIVE);
+        return ResponseEntity.ok(dictionary.getSourcesActive());
     }
 
     @GetMapping("/typesActive")
     public ResponseEntity<List<String>> getAllTypesActive(){
-        return ResponseEntity.ok(Dictionary.TYPES_ACTIVES);
+        return ResponseEntity.ok(dictionary.getTypesActives());
     }
 
     @GetMapping("/vidActive")
     public ResponseEntity<List<String>> getAllVidActive(){
-        return ResponseEntity.ok(Dictionary.VID_ACTIVE);
+        return ResponseEntity.ok(dictionary.getVidActive());
     }
 
 

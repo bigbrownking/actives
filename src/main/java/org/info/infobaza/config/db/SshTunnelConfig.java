@@ -4,9 +4,10 @@ package org.info.infobaza.config.db;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 
-
+@Slf4j
 @Configuration
 public class SshTunnelConfig {
 
@@ -14,6 +15,7 @@ public class SshTunnelConfig {
 
     @PostConstruct
     public void init() {
+        log.info("Connecting to SER...");
         try {
             String sshHost = "10.10.30.4";
             String sshUser = "r.kazbayev";

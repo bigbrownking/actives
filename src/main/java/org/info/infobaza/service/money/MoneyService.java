@@ -26,7 +26,6 @@ public class MoneyService implements AbstractService {
     @ServiceMetadata(
             type = {"Наличие"},
             source = {"FNO270", "FNO240", "FNO250"},
-            vids = {"Денежные средства"},
             isActive = true
     )
     public List<ESFInformationRecordDt> getAllMoneyInfo(String iin, String dateFrom, String dateTo) throws IOException {

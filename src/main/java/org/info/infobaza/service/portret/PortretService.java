@@ -9,7 +9,9 @@ import org.info.infobaza.dto.response.person.Person;
 import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.model.info.job.CompanyRecord;
-import org.info.infobaza.model.info.person.NominalFiz;
+import org.info.infobaza.model.info.person.nominal.Nominal;
+import org.info.infobaza.model.info.person.nominal.NominalFiz;
+import org.info.infobaza.model.info.person.nominal.NominalUl;
 import org.info.infobaza.model.info.person.PersonRecord;
 import org.info.infobaza.security.jwt.JwtTokenUtil;
 import org.info.infobaza.util.convert.Mapper;
@@ -51,34 +53,41 @@ public class PortretService {
         try {
             List<PersonRecord> persons = jdbcTemplate.query(sql, mapper::mapRowToPortret);
 
+            List<Nominal> nominals;
             String nominalFizSql = "select * from pfr_dashboard.nominals_1 where iin_bin = ?";
-            List<NominalFiz> nominalFiz = jdbcTemplate.query(
+            nominals = jdbcTemplate.query(
                     nominalFizSql,
                     new Object[]{iin}, mapper::mapRowToNominalFiz
             );
 
-//            String nominalUlSql = "select * from pfr_dashboard.nominals_1 where iin_bin = ?";
-//            List<> nominalUl = jdbcTemplate.query(
-//                    nominalUlSql,
-//                    new Object[]{iin}, mapper::
-//            );
+            if(nominals.isEmpty()){
+                String nominalUlSql = "select * from pfr_dashboard.nominal_ul where iin_bin = ?";
+                nominals = jdbcTemplate.query(
+                        nominalUlSql,
+                        new Object[]{iin}, mapper::mapRowToNominalUl
+                );
+            }
+
             List<String> portrets = persons.stream().map(PersonRecord::getPortret).distinct().toList();
             Age age = fetchAge(iin);
-            List<String> status;
 
-            if(!age.isStatus()){
+            List<String> status;
+            if(age == null){
+                status = Collections.singletonList("Нет сведений");
+            }
+            else if(!age.isStatus()){
                 status = Collections.singletonList("Умерший");
             }
             else{
                status = !portrets.isEmpty() ? portrets : null;
             }
-            return new Person(fetchFIO_FL(
-                    iin),
-                    age.getAge(),
+            return new Person(getIinInfo(
+                    iin).getName(),
+                    age == null ? 0 : age.getAge(),
                     iin,
                     extractPhoto(iin),
                     status,
-                    !nominalFiz.isEmpty());
+                    !nominals.isEmpty());
         } catch (EmptyResultDataAccessException e) {
             log.warn("No person record found for IIN: {}", iin);
             throw new NotFoundException("No person found with iin " + iin);

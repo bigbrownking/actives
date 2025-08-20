@@ -21,7 +21,7 @@ public final class Dictionary {
 
 
     private final ApplicationContext applicationContext;
-    private final ServiceSources serviceSources = getDistinctSources();
+    private ServiceSources serviceSources;
 
     public static final List<String> VID_INCOME = List.of("Доход по данным ЕНПФ", "Доход ИП", "СГД ЮЛ", "Доход по данным ФНО", "Денежные средства",
             "в.т.ч. Доход от ИП", "в.т.ч. Доход из источников за пределами РК", "в.т.ч. Имущественный доход",
@@ -86,6 +86,7 @@ public final class Dictionary {
 
     @PostConstruct
     public void init() {
+        serviceSources = getDistinctSources();
         serviceBeans = applicationContext.getBeansOfType(AbstractService.class);
         incomeMethodsBySource = new HashMap<>();
         activeMethodsBySource = new HashMap<>();

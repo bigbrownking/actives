@@ -8,7 +8,8 @@ import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.job.StatusRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
-import org.info.infobaza.model.info.person.NominalFiz;
+import org.info.infobaza.model.info.person.nominal.NominalFiz;
+import org.info.infobaza.model.info.person.nominal.NominalUl;
 import org.info.infobaza.model.info.person.PersonRecord;
 import org.info.infobaza.model.info.person.RelationRecord;
 import org.springframework.stereotype.Component;
@@ -167,6 +168,22 @@ public class Mapper {
                 rs.getLong("total_sum"),
                 rs.getDouble("avg_month_income"),
                 rs.getDouble("ratio")
+        );
+    }
+    public NominalUl mapRowToNominalUl(ResultSet rs, int rowNum) throws SQLException {
+        return new NominalUl(
+                rs.getString("iin_bin"),
+                rs.getString("iin_bin_pokup"),
+                rs.getString("iin_bin_prod"),
+                rs.getObject("date", LocalDate.class),
+                rs.getString("database"),
+                rs.getString("aktivy"),
+                rs.getString("oper"),
+                rs.getString("dopinfo"),
+                rs.getString("num_doc"),
+                rs.getInt("summ"),
+                rs.getString("IIN_SELLER"),
+                rs.getInt("total_turnover")
         );
     }
 

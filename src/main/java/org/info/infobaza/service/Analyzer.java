@@ -603,7 +603,7 @@ public class Analyzer {
 
     public YearlyRecordCounts getYearlyRecordCounts(String iin, String dateFrom, String dateTo,
                                                     List<String> sources, List<String> types,
-                                                    List<String> iins, boolean isActive) throws IOException {
+                                                    List<String> iins, boolean isActive) {
         List<YearlyCount> counts = isActive
                 ? calculateActiveYearlyCounts(iin, dateFrom, dateTo, sources, types, iins)
                 : calculateIncomeYearlyCounts(iin, dateFrom, dateTo, sources, iins);
@@ -654,7 +654,7 @@ public class Analyzer {
         List<String> involvedIins = new ArrayList<>(iins != null ? iins.size() + 1 : 1);
         involvedIins.add(iin);
         if (iins != null) {
-            involvedIins.addAll(iins.stream().distinct().filter(subIin -> !subIin.equals(iin)).collect(Collectors.toList()));
+            involvedIins.addAll(iins.stream().distinct().filter(subIin -> !subIin.equals(iin)).toList());
         }
         return involvedIins;
     }
