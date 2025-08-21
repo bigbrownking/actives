@@ -61,7 +61,7 @@ public class PdfExportServiceImpl implements PdfExportService {
 
 
         // Fetch Person data
-        Person person = portretService.getPerson(request.getIin());
+        Person person = portretService.getPerson(iin);
 
         // Fetch Relations data
         RelationActiveWithTypes primaryRelations = relationService.getPrimaryRelationsOfPerson(

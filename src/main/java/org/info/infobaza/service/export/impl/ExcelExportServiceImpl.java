@@ -173,7 +173,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
         infoText.append("Номинал: ").append(person.getIsNominal() != null && person.getIsNominal() ? "Номинал" : "Не номинал");
         infoCell.setCellValue(infoText.toString());
 
-        return rowIndex + 1; // Add spacing
+        return rowIndex + 1;
     }
 
     private int addRelationsSection(XSSFSheet sheet, int rowIndex, RelationActiveWithTypes primaryRelations,
@@ -210,20 +210,22 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                 continue;
             }
 
-            // Header row
             XSSFRow headerRow = sheet.createRow(rowIndex++);
             setCell(headerRow, 0, "ФИО", true);
             setCell(headerRow, 1, "Связь", true);
             setCell(headerRow, 2, "ИИН", true);
             setCell(headerRow, 3, "Активы", true);
+            setCell(headerRow, 4, "Доходы", true);
+            setCell(headerRow, 5, "Номинал", true);
 
-            // Data rows
             for (RelationActive ra : relations) {
                 XSSFRow row = sheet.createRow(rowIndex++);
                 setCell(row, 0, ra.getFio() != null ? ra.getFio() : "N/A", false);
                 setCell(row, 1, ra.getRelation() != null ? ra.getRelation() : "N/A", false);
                 setCell(row, 2, ra.getIin() != null ? ra.getIin() : "N/A", false);
                 setCell(row, 3, ra.getActives() != null ? ra.getActives() : "N/A", false);
+                setCell(row, 4, ra.getIncomes() != null ? ra.getIncomes() : "N/A", false);
+                setCell(row, 5, ra.isNominal() ? "Да": "Нет", false);
             }
         }
         return rowIndex;
