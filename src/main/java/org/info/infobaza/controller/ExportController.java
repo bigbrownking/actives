@@ -30,15 +30,19 @@ public class ExportController {
     @PostMapping("/pdf")
     public void exportToPdf(@RequestBody RelativesActiveRequest request,
                             HttpServletResponse response) throws IOException, DocumentException, NotFoundException {
-        if (request.getIin() == null || request.getIin().isEmpty()) {
-            response.sendError(HttpStatus.BAD_REQUEST.value(), "IIN cannot be null or empty");
-            return;
-        }
-
         response.setContentType("application/pdf");
         response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".pdf");
 
         pdfExportService.exportToPdf(response.getOutputStream(), request);
+    }
+
+    @PostMapping("/word")
+    public void exportToWord(@RequestBody RelativesActiveRequest request,
+                             HttpServletResponse response) throws IOException, DocumentException, NotFoundException {
+        response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".docx");
+
+        wordExportService.exportToWord(response.getOutputStream(), request);
     }
 
 }
