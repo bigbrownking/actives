@@ -81,8 +81,9 @@ public class PortretService {
             else{
                status = !portrets.isEmpty() ? portrets : null;
             }
-            return new Person(getIinInfo(
-                    iin).getName(),
+            IinInfo iinInfo = getIinInfo(iin);
+            return new Person(
+                    iinInfo == null ? "Не найдено в базе данных" : iinInfo.getName(),
                     age == null ? 0 : age.getAge(),
                     iin,
                     extractPhoto(iin),

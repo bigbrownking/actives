@@ -61,6 +61,7 @@ public class WebConfig {
                         .requestMatchers("/info/**").permitAll()
                         .requestMatchers("/portret/**").permitAll()
                         .requestMatchers("/job/**").permitAll()
+                        .requestMatchers("/export/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .anyRequest().authenticated()
                 )

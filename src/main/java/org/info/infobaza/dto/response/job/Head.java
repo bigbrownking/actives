@@ -21,4 +21,9 @@ public class Head {
     private Double tax; // уплата налогов
     private List<EsfOverall> esf; // esf
     private List<String> statuses; // status
+
+    public boolean isEmpty(){
+        return head.isEmpty() && oked.isEmpty()
+                && esf.isEmpty() && statuses.isEmpty();
+    }
 }

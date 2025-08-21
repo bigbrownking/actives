@@ -24,7 +24,7 @@ public class IndustrialService {
             );
         }catch (EmptyResultDataAccessException e){
             log.warn("No industry found for IIN: {}", iin);
-            throw new NotFoundException("No industry found");
+            return null;
         }
     }
 }
