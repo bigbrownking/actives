@@ -56,6 +56,8 @@ public class WordExportServiceImpl implements WordExportService {
             String dateFrom = request.getDateFrom().toString();
             String dateTo = request.getDateTo().toString();
             String iin = request.getIin();
+            List<String> years = request.getYears() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYears();
+
 
             // Fetch Person data
             Person person = portretService.getPerson(request.getIin());
@@ -63,22 +65,38 @@ public class WordExportServiceImpl implements WordExportService {
             // Fetch Relations data
             RelationActiveWithTypes primaryRelations = relationService.getPrimaryRelationsOfPerson(
                     iin, dateFrom, dateTo);
+
             RelationActiveWithTypes secondaryRelations = relationService.getSecondaryRelationsOfPerson(
                     iin, dateFrom, dateTo);
 
             // Fetch job information
-            List<Pension> pensions = enpfService.getPension(iin, dateFrom, dateTo);
-            Head head = headService.constructHead(iin, dateFrom, dateTo);
+            List<Pension> pensions = enpfService.getPension(
+                    iin,
+                    dateFrom, dateTo);
+
+            Head head = headService.constructHead(
+                    iin,
+                    dateFrom, dateTo);
+
             Industry industry = industrialService.getIndustry(iin);
 
             // Fetch Active and Income data
             ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
-                    request.getIin(), dateFrom, dateTo, dateUtil.getYears(dateFrom, dateTo),
-                    request.getVids(), request.getTypes(), request.getSources(), request.getIins());
+                    iin,
+                    dateFrom, dateTo,
+                    years,
+                    request.getVids(),
+                    request.getTypes(),
+                    request.getSources(),
+                    request.getIins());
 
             IncomeWithRecords incomeResponse = (IncomeWithRecords) analyzer.getAllIncomesOfPersonsByDates(
-                    request.getIin(), dateFrom, dateTo, dateUtil.getYears(dateFrom, dateTo),
-                    request.getVids(), request.getSources(), request.getIins());
+                    iin,
+                    dateFrom, dateTo,
+                    years,
+                    request.getVids(),
+                    request.getSources(),
+                    request.getIins());
 
             addPortraitSection(document, person);
             addRelationsSection(document, primaryRelations, secondaryRelations);

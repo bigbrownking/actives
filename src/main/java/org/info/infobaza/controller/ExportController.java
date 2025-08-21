@@ -38,11 +38,19 @@ public class ExportController {
 
     @PostMapping("/word")
     public void exportToWord(@RequestBody RelativesActiveRequest request,
-                             HttpServletResponse response) throws IOException, DocumentException, NotFoundException {
+                             HttpServletResponse response) throws IOException, NotFoundException {
         response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".docx");
 
         wordExportService.exportToWord(response.getOutputStream(), request);
     }
 
+    @PostMapping("/excel")
+    public void exportToExcel(@RequestBody RelativesActiveRequest request,
+                              HttpServletResponse response) throws IOException, NotFoundException {
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".xlsx");
+
+        excelExportService.exportToExcel(response.getOutputStream(), request);
+    }
 }

@@ -57,6 +57,8 @@ public class PdfExportServiceImpl implements PdfExportService {
         String dateFrom = request.getDateFrom().toString();
         String dateTo = request.getDateTo().toString();
         String iin = request.getIin();
+        List<String> years = request.getYears() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYears();
+
 
         // Fetch Person data
         Person person = portretService.getPerson(request.getIin());
@@ -87,18 +89,18 @@ public class PdfExportServiceImpl implements PdfExportService {
 
         // Fetch Active and Income data
         ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
-                request.getIin(),
+                iin,
                 dateFrom, dateTo,
-                dateUtil.getYears(dateFrom, dateTo),
+                years,
                 request.getVids(),
                 request.getTypes(),
                 request.getSources(),
                 request.getIins());
 
         IncomeWithRecords incomeResponse = (IncomeWithRecords) analyzer.getAllIncomesOfPersonsByDates(
-                request.getIin(),
+                iin,
                 dateFrom, dateTo,
-                dateUtil.getYears(dateFrom, dateTo),
+                years,
                 request.getVids(),
                 request.getSources(),
                 request.getIins());
