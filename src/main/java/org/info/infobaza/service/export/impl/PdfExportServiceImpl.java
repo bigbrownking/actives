@@ -400,9 +400,9 @@ public class PdfExportServiceImpl implements PdfExportService {
                 continue;
             }
 
-            PdfPTable relationsTable = new PdfPTable(4);
+            PdfPTable relationsTable = new PdfPTable(6);
             relationsTable.setWidthPercentage(100);
-            relationsTable.setWidths(new float[]{3, 2, 2, 3});
+            relationsTable.setWidths(new float[]{2.5f, 1.5f, 1.5f, 2, 1.2f, 1.2f});
             relationsTable.setSpacingBefore(5);
             relationsTable.setSpacingAfter(10);
 
@@ -410,12 +410,16 @@ public class PdfExportServiceImpl implements PdfExportService {
             addTableHeader(relationsTable, "Связь", boldFont);
             addTableHeader(relationsTable, "ИИН", boldFont);
             addTableHeader(relationsTable, "Активы", boldFont);
+            addTableHeader(relationsTable, "Доходы", boldFont);
+            addTableHeader(relationsTable, "Номинал", boldFont);
 
             for (RelationActive ra : relations) {
                 addTableCell(relationsTable, ra.getFio() != null ? ra.getFio() : "N/A", font);
                 addTableCell(relationsTable, ra.getRelation() != null ? ra.getRelation() : "N/A", font);
                 addTableCell(relationsTable, ra.getIin() != null ? ra.getIin() : "N/A", font);
                 addTableCell(relationsTable, ra.getActives() != null ? ra.getActives() : "N/A", font);
+                addTableCell(relationsTable, ra.getIncomes() != null ? ra.getIncomes() : "N/A", font);
+                addTableCell(relationsTable, ra.isNominal() ? "Да": "Нет", font);
             }
 
             document.add(relationsTable);

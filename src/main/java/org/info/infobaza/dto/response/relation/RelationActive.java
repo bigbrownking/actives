@@ -10,5 +10,7 @@ public class RelationActive {
     private String fio;
     private String iin;
     private String actives;
+    private String incomes;
+    private boolean isNominal;
     private int level;
 }

@@ -48,11 +48,9 @@ public class Analyzer {
     private final SQLFileUtil sqlFileUtil;
     private final NumberConverter numberConverter;
 
-    // Cache for method-to-service mapping to avoid repeated lookups
     private static final Map<Method, AbstractService> methodToServiceCache = new ConcurrentHashMap<>();
 
     static {
-        // Populate cache during initialization
         for (AbstractService service : Dictionary.getServiceBeans().values()) {
             for (Method method : service.getClass().getDeclaredMethods()) {
                 if (method.getAnnotation(ServiceMetadata.class) != null) {
@@ -101,6 +99,7 @@ public class Analyzer {
     public List<RelationActive> toRelationActives(List<RelationRecord> relationRecords, String dateFrom, String dateTo) {
         return relationRecords.parallelStream()
                 .map(rr -> toRelationActive(rr, dateFrom, dateTo))
+                .filter(rr -> !rr.getActives().equals("0"))
                 .collect(Collectors.toList());
     }
 
@@ -110,13 +109,16 @@ public class Analyzer {
         String iin = relationRecord.getIin_2();
         IinInfo iinInfo = portretService.getIinInfo(iin);
         Double totalActives = calculateTotalActivesForPerson(iin, dateFrom, dateTo);
+        Double totalIncomes = calculateTotalIncomeByIIN(iin, dateFrom, dateTo);
 
         return RelationActive.builder()
                 .relation(relationRecord.getStatus())
                 .fio(iinInfo != null ? iinInfo.getName() : "Unknown")
                 .iin(iin)
-                .actives(totalActives != null ? numberConverter.formatNumber(totalActives) : "0.0")
+                .actives(totalActives != null ? numberConverter.formatNumber(totalActives) : "0")
+                .incomes(totalIncomes != null ? numberConverter.formatNumber(totalIncomes) : "0")
                 .level(relationRecord.getLevel_rod())
+                .isNominal(portretService.isNominal(iin))
                 .build();
     }
 
@@ -591,9 +593,13 @@ public class Analyzer {
                 ));
     }
 
-    public double calculateTotalIncomeByIIN(String iin, String dateFrom, String dateTo) throws IOException {
+    public double calculateTotalIncomeByIIN(String iin, String dateFrom, String dateTo) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
-        fetcher.fetchAllIncomes(iin, dateFrom, dateTo, allInfoRecords, null);
+        Set<String> targetSources = Dictionary.getIncomeMethodsBySource().keySet();
+
+        processRecords(Collections.singletonList(iin), dateFrom, dateTo, null, targetSources, null, null,
+                allInfoRecords, null, false);
+
         return allInfoRecords.stream()
                 .filter(Objects::nonNull)
                 .filter(record -> record.getSumm() != null)

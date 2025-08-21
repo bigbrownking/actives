@@ -53,21 +53,6 @@ public class PortretService {
         try {
             List<PersonRecord> persons = jdbcTemplate.query(sql, mapper::mapRowToPortret);
 
-            List<Nominal> nominals;
-            String nominalFizSql = "select * from pfr_dashboard.nominals_1 where iin_bin = ?";
-            nominals = jdbcTemplate.query(
-                    nominalFizSql,
-                    new Object[]{iin}, mapper::mapRowToNominalFiz
-            );
-
-            if(nominals.isEmpty()){
-                String nominalUlSql = "select * from pfr_dashboard.nominal_ul where iin_bin = ?";
-                nominals = jdbcTemplate.query(
-                        nominalUlSql,
-                        new Object[]{iin}, mapper::mapRowToNominalUl
-                );
-            }
-
             List<String> portrets = persons.stream().map(PersonRecord::getPortret).distinct().toList();
             Age age = fetchAge(iin);
 
@@ -88,7 +73,7 @@ public class PortretService {
                     iin,
                     extractPhoto(iin),
                     status,
-                    !nominals.isEmpty());
+                    isNominal(iin));
         } catch (EmptyResultDataAccessException e) {
             log.warn("No person record found for IIN: {}", iin);
             throw new NotFoundException("No person found with iin " + iin);
@@ -262,5 +247,23 @@ public class PortretService {
             log.error("Error fetching FIO for IIN: {}", iin, e);
             return null;
         }
+    }
+
+    public boolean isNominal(String iin_bin){
+        List<Nominal> nominals;
+        String nominalFizSql = "select * from pfr_dashboard.nominals_1 where iin_bin = ?";
+        nominals = jdbcTemplate.query(
+                nominalFizSql,
+                new Object[]{iin_bin}, mapper::mapRowToNominalFiz
+        );
+
+        if(nominals.isEmpty()){
+            String nominalUlSql = "select * from pfr_dashboard.nominal_ul where iin_bin = ?";
+            nominals = jdbcTemplate.query(
+                    nominalUlSql,
+                    new Object[]{iin_bin}, mapper::mapRowToNominalUl
+            );
+        }
+        return !nominals.isEmpty();
     }
 }
