@@ -60,7 +60,7 @@ public class WordExportServiceImpl implements WordExportService {
 
 
             // Fetch Person data
-            Person person = portretService.getPerson(request.getIin());
+            Person person = portretService.getPerson(iin);
 
             // Fetch Relations data
             RelationActiveWithTypes primaryRelations = relationService.getPrimaryRelationsOfPerson(
@@ -207,7 +207,7 @@ public class WordExportServiceImpl implements WordExportService {
                 continue;
             }
 
-            XWPFTable table = document.createTable(relations.size() + 1, 4);
+            XWPFTable table = document.createTable(relations.size() + 1, 6);
             table.setWidth("100%");
 
             XWPFTableRow headerRow = table.getRow(0);
@@ -215,6 +215,8 @@ public class WordExportServiceImpl implements WordExportService {
             setTableCell(headerRow.getCell(1), "Связь", true);
             setTableCell(headerRow.getCell(2), "ИИН", true);
             setTableCell(headerRow.getCell(3), "Активы", true);
+            setTableCell(headerRow.getCell(4), "Доходы", true);
+            setTableCell(headerRow.getCell(5), "Номинал", true);
 
             int rowIndex = 1;
             for (RelationActive ra : relations) {
@@ -223,6 +225,8 @@ public class WordExportServiceImpl implements WordExportService {
                 setTableCell(row.getCell(1), ra.getRelation() != null ? ra.getRelation() : "N/A", false);
                 setTableCell(row.getCell(2), ra.getIin() != null ? ra.getIin() : "N/A", false);
                 setTableCell(row.getCell(3), ra.getActives() != null ? ra.getActives() : "N/A", false);
+                setTableCell(row.getCell(4), ra.getIncomes() != null ? ra.getIncomes() : "N/A", false);
+                setTableCell(row.getCell(5), ra.isNominal() ? "Да": "Нет", false);
             }
         }
     }
