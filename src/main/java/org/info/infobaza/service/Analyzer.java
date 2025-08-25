@@ -3,7 +3,9 @@ package org.info.infobaza.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.constants.Dictionary;
-import org.info.infobaza.dto.response.info.*;
+import org.info.infobaza.constants.QueryLocationDictionary;
+import org.info.infobaza.dto.response.info.IinInfo;
+import org.info.infobaza.dto.response.info.RecordGroup;
 import org.info.infobaza.dto.response.info.active.ActiveResponse;
 import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
 import org.info.infobaza.dto.response.info.active.OverallActive;
@@ -21,21 +23,18 @@ import org.info.infobaza.model.info.person.RelationRecord;
 import org.info.infobaza.service.portret.PortretService;
 import org.info.infobaza.util.convert.Fetcher;
 import org.info.infobaza.util.convert.Mapper;
-import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.util.convert.NumberConverter;
 import org.info.infobaza.util.convert.SQLFileUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static org.info.infobaza.util.convert.Fetcher.keepDistinctEsf;
-import static org.info.infobaza.util.convert.Fetcher.keepDistinctInfo;
 
 @Component
 @Slf4j
@@ -43,7 +42,6 @@ import static org.info.infobaza.util.convert.Fetcher.keepDistinctInfo;
 public class Analyzer {
     private final PortretService portretService;
     private final JdbcTemplate jdbcTemplate;
-    private final Fetcher fetcher;
     private final Mapper mapper;
     private final SQLFileUtil sqlFileUtil;
     private final NumberConverter numberConverter;
@@ -449,14 +447,17 @@ public class Analyzer {
                 .distinct()
                 .collect(Collectors.toList());
 
-        if (allRecords.isEmpty()) {
+        log.info("ALL RECORDS SIZE: {}", allRecords.size());
+        List<RecordDt> deduplicatedRecords = deduplicateRecords(allRecords);
+        if (deduplicatedRecords.isEmpty()) {
             log.warn("No records provided for date range {} to {}, years: {}", dateFrom, dateTo, years);
             return isSummaryMode
                     ? OverallActive.builder().dateFrom(dateFrom).dateTo(dateTo).selectedYears(years).recordsByOper(new HashMap<>()).build()
                     : ActiveWithRecords.builder().dateFrom(dateFrom).dateTo(dateTo).selectedYears(years).recordsByOper(new HashMap<>()).build();
         }
+        log.info("AFTER DEDUPLICATION: {}", deduplicatedRecords.size());
 
-        Map<String, List<RecordDt>> recordsByOper = groupRecordsByOper(allRecords);
+        Map<String, List<RecordDt>> recordsByOper = groupRecordsByOper(deduplicatedRecords);
 
         if (isSummaryMode) {
             return buildOverallActive(recordsByOper, dateFrom, dateTo, years, iins);
@@ -469,6 +470,94 @@ public class Analyzer {
                     .recordsByOper(formattedRecords)
                     .build();
         }
+    }
+
+    private List<RecordDt> deduplicateRecords(List<RecordDt> records) {
+        if (records == null || records.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<RecordDt> result = new ArrayList<>();
+
+        for (RecordDt currentRecord : records) {
+            boolean isDuplicate = false;
+
+            for (RecordDt existingRecord : result) {
+                if (areDuplicates(currentRecord, existingRecord)) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+
+            if (!isDuplicate) {
+                result.add(currentRecord);
+            }
+        }
+
+        return result;
+    }
+
+    private boolean areDuplicates(RecordDt record1, RecordDt record2) {
+        if (Objects.equals(record1.getDatabase(), record2.getDatabase())) {
+            return false;
+        }
+
+        boolean sameIin = isSameIin(record1, record2);
+
+        boolean sameSumm = Objects.equals(record1.getSumm(), record2.getSumm());
+
+        boolean sameAktyvy = isSameAktyvy(record1, record2);
+
+        boolean sameOrCloseDate = isDateWithinTwoDays(record1.getDate(), record2.getDate());
+
+        return sameIin && sameSumm  && sameAktyvy && sameOrCloseDate;
+    }
+    private boolean isSameAktyvy(RecordDt record1, RecordDt record2) {
+        String aktyvy1 = getAktyvyValue(record1);
+        String aktyvy2 = getAktyvyValue(record2);
+
+
+        return Objects.equals(aktyvy1, aktyvy2);
+    }
+    private String getAktyvyValue(RecordDt record) {
+        if (record instanceof InformationRecordDt infoRecord) {
+            return infoRecord.getAktyvy();
+        } else if (record instanceof ESFInformationRecordDt esfRecord) {
+            return esfRecord.getAktivy();
+        }
+        return null;
+    }
+
+    private boolean isSameIin(RecordDt record1, RecordDt record2) {
+        if (record1 instanceof ESFInformationRecordDt esf1 && record2 instanceof ESFInformationRecordDt esf2) {
+
+            return (Objects.equals(esf1.getIin_bin(), esf2.getIin_bin()) &&
+                    Objects.equals(esf1.getIin_bin_pokup(), esf2.getIin_bin_pokup()) &&
+                    Objects.equals(esf1.getIin_bin_prod(), esf2.getIin_bin_prod()));
+        }
+
+        if (record1 instanceof ESFInformationRecordDt esf && record2 instanceof InformationRecordDt info) {
+
+            return Objects.equals(esf.getIin_bin(), info.getIin_bin()) &&
+                    Objects.equals(esf.getIin_bin_pokup(), info.getIin_bin()) &&
+                    Objects.equals(esf.getIin_bin_prod(), info.getIin_bin());
+        }
+
+        if (record1 instanceof InformationRecordDt info && record2 instanceof ESFInformationRecordDt esf) {
+            return Objects.equals(esf.getIin_bin(), info.getIin_bin()) &&
+                    Objects.equals(esf.getIin_bin_pokup(), info.getIin_bin()) &&
+                    Objects.equals(esf.getIin_bin_prod(), info.getIin_bin());        }
+
+        return Objects.equals(record1.getIin_bin(), record2.getIin_bin());
+    }
+
+    private boolean isDateWithinTwoDays(LocalDate date1, LocalDate date2) {
+        if (date1 == null || date2 == null) {
+            return Objects.equals(date1, date2);
+        }
+
+        long daysDifference = Math.abs(ChronoUnit.DAYS.between(date1, date2));
+        return daysDifference <= 2;
     }
 
     private Map<String, List<RecordDt>> groupRecordsByOper(List<RecordDt> allRecords) {
@@ -690,5 +779,15 @@ public class Analyzer {
                 )
                 .sorted(Comparator.comparing(YearlyCount::getYear))
                 .collect(Collectors.toList());
+    }
+    public static List<InformationRecordDt> keepDistinctInfo(List<InformationRecordDt> informationRecords) {
+        return informationRecords.stream().distinct().collect(Collectors.toList());
+    }
+
+    public static List<ESFInformationRecordDt> keepDistinctEsf(List<ESFInformationRecordDt> esfInformationRecords) {
+        return esfInformationRecords.stream().distinct().collect(Collectors.toList());
+    }
+    public static List<RelationRecord> keepDistinctRelations(List<RelationRecord> relationRecords) {
+        return relationRecords.stream().distinct().collect(Collectors.toList());
     }
 }

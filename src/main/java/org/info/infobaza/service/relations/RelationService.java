@@ -3,12 +3,12 @@ package org.info.infobaza.service.relations;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.constants.Dictionary;
+import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.dto.response.relation.RelationActive;
 import org.info.infobaza.dto.response.relation.RelationActiveWithTypes;
 import org.info.infobaza.model.info.person.RelationRecord;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.util.convert.Mapper;
-import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.util.convert.SQLFileUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.info.infobaza.util.convert.Fetcher.keepDistinctRelations;
+import static org.info.infobaza.service.Analyzer.keepDistinctRelations;
 
 @Service
 @Slf4j
@@ -88,13 +88,9 @@ public class RelationService {
             String firstStatus = status.split(",")[0].trim();
             String category = Dictionary.SECONDARY_STATUSES.get(firstStatus);
             if (category != null) {
-                RelationActive ra = relationActives.stream()
+                relationActives.stream()
                         .filter(active -> active.getIin().equals(rr.getIin_2()))
-                        .findFirst()
-                        .orElse(null);
-                if (ra != null) {
-                    typeToRelation.computeIfAbsent(category, k -> new ArrayList<>()).add(ra);
-                }
+                        .findFirst().ifPresent(ra -> typeToRelation.computeIfAbsent(category, k -> new ArrayList<>()).add(ra));
             }
         }
 

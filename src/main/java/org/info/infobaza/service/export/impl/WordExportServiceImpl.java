@@ -2,6 +2,7 @@ package org.info.infobaza.service.export.impl;
 
 import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.*;
+import org.info.infobaza.dto.request.ExportRequest;
 import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
 import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
@@ -50,13 +51,14 @@ public class WordExportServiceImpl implements WordExportService {
     private final DateUtil dateUtil;
 
     @Override
-    public void exportToWord(OutputStream outputStream, RelativesActiveRequest request) throws IOException, NotFoundException {
+    public void exportToWord(OutputStream outputStream, ExportRequest request) throws IOException, NotFoundException {
         XWPFDocument document = new XWPFDocument();
         try {
             String dateFrom = request.getDateFrom().toString();
             String dateTo = request.getDateTo().toString();
             String iin = request.getIin();
-            List<String> years = request.getYears() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYears();
+            List<String> yearsActive = request.getYearsActive() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYearsActive();
+            List<String> yearsIncome = request.getYearsIncome() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYearsIncome();
 
 
             // Fetch Person data
@@ -84,7 +86,7 @@ public class WordExportServiceImpl implements WordExportService {
             ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
                     iin,
                     dateFrom, dateTo,
-                    years,
+                    yearsActive,
                     request.getVids(),
                     request.getTypes(),
                     request.getSources(),
@@ -93,7 +95,7 @@ public class WordExportServiceImpl implements WordExportService {
             IncomeWithRecords incomeResponse = (IncomeWithRecords) analyzer.getAllIncomesOfPersonsByDates(
                     iin,
                     dateFrom, dateTo,
-                    years,
+                    yearsIncome,
                     request.getVids(),
                     request.getSources(),
                     request.getIins());

@@ -1,5 +1,6 @@
 package org.info.infobaza.service.export;
 
+import org.info.infobaza.dto.request.ExportRequest;
 import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.exception.NotFoundException;
 
@@ -7,5 +8,5 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 public interface WordExportService {
-    void exportToWord(OutputStream outputStream, RelativesActiveRequest request) throws IOException, NotFoundException;
+    void exportToWord(OutputStream outputStream, ExportRequest request) throws IOException, NotFoundException;
 }

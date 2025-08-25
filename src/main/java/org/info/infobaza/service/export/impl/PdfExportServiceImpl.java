@@ -7,6 +7,7 @@ import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.info.infobaza.dto.request.ExportRequest;
 import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
 import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
@@ -53,11 +54,13 @@ public class PdfExportServiceImpl implements PdfExportService {
     private final DateUtil dateUtil;
 
     @Override
-    public void exportToPdf(OutputStream outputStream, RelativesActiveRequest request) throws IOException, NotFoundException, DocumentException {
+    public void exportToPdf(OutputStream outputStream, ExportRequest request) throws IOException, NotFoundException, DocumentException {
+        log.info("REQUEST IS : {}", request);
         String dateFrom = request.getDateFrom().toString();
         String dateTo = request.getDateTo().toString();
         String iin = request.getIin();
-        List<String> years = request.getYears() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYears();
+        List<String> yearsActive = request.getYearsActive() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYearsActive();
+        List<String> yearsIncome = request.getYearsIncome() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYearsIncome();
 
 
         // Fetch Person data
@@ -91,7 +94,7 @@ public class PdfExportServiceImpl implements PdfExportService {
         ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
                 iin,
                 dateFrom, dateTo,
-                years,
+                yearsActive,
                 request.getVids(),
                 request.getTypes(),
                 request.getSources(),
@@ -100,7 +103,7 @@ public class PdfExportServiceImpl implements PdfExportService {
         IncomeWithRecords incomeResponse = (IncomeWithRecords) analyzer.getAllIncomesOfPersonsByDates(
                 iin,
                 dateFrom, dateTo,
-                years,
+                yearsIncome,
                 request.getVids(),
                 request.getSources(),
                 request.getIins());

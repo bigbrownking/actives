@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.ClientAnchor;
 import org.apache.poi.xssf.usermodel.*;
+import org.info.infobaza.dto.request.ExportRequest;
 import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
 import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
@@ -49,7 +50,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
     private final DateUtil dateUtil;
 
     @Override
-    public void exportToExcel(OutputStream outputStream, RelativesActiveRequest request) throws IOException, NotFoundException {
+    public void exportToExcel(OutputStream outputStream, ExportRequest request) throws IOException, NotFoundException {
         XSSFWorkbook workbook = new XSSFWorkbook();
         try {
             XSSFSheet sheet = workbook.createSheet("Person Report");
@@ -58,7 +59,8 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             String dateFrom = request.getDateFrom().toString();
             String dateTo = request.getDateTo().toString();
             String iin = request.getIin();
-            List<String> years = request.getYears() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYears();
+            List<String> yearsActive = request.getYearsActive() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYearsActive();
+            List<String> yearsIncome = request.getYearsIncome() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYearsIncome();
 
 
             // Fetch data
@@ -85,7 +87,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
                     iin,
                     dateFrom, dateTo,
-                    years,
+                    yearsActive,
                     request.getVids(),
                     request.getTypes(),
                     request.getSources(),
@@ -94,7 +96,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             IncomeWithRecords incomeResponse = (IncomeWithRecords) analyzer.getAllIncomesOfPersonsByDates(
                     iin,
                     dateFrom, dateTo,
-                    years,
+                    yearsIncome,
                     request.getVids(),
                     request.getSources(),
                     request.getIins());

@@ -2,22 +2,21 @@ package org.info.infobaza.controller;
 
 import com.lowagie.text.DocumentException;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.info.infobaza.dto.request.GetPortretRequest;
-import org.info.infobaza.dto.request.RelativesActiveRequest;
+import org.info.infobaza.dto.request.ExportRequest;
 import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.service.export.ExcelExportService;
 import org.info.infobaza.service.export.PdfExportService;
 import org.info.infobaza.service.export.WordExportService;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.info.infobaza.util.logging.LogRequest;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+
+import static org.info.infobaza.constants.Dictionary.*;
 
 @RestController
 @RequestMapping("/export/")
@@ -27,30 +26,27 @@ public class ExportController {
     private final ExcelExportService excelExportService;
     private final PdfExportService pdfExportService;
 
+    @LogRequest
     @PostMapping("/pdf")
-    public void exportToPdf(@RequestBody RelativesActiveRequest request,
+    public void exportToPdf(@RequestBody ExportRequest request,
                             HttpServletResponse response) throws IOException, DocumentException, NotFoundException {
-        response.setContentType("application/pdf");
-        response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".pdf");
-
+        generate_pdf_header(request, response);
         pdfExportService.exportToPdf(response.getOutputStream(), request);
     }
 
+    @LogRequest
     @PostMapping("/word")
-    public void exportToWord(@RequestBody RelativesActiveRequest request,
+    public void exportToWord(@RequestBody ExportRequest request,
                              HttpServletResponse response) throws IOException, NotFoundException {
-        response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-        response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".docx");
-
+        generate_word_header(request, response);
         wordExportService.exportToWord(response.getOutputStream(), request);
     }
 
+    @LogRequest
     @PostMapping("/excel")
-    public void exportToExcel(@RequestBody RelativesActiveRequest request,
+    public void exportToExcel(@RequestBody ExportRequest request,
                               HttpServletResponse response) throws IOException, NotFoundException {
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".xlsx");
-
+        generate_excel_header(request, response);
         excelExportService.exportToExcel(response.getOutputStream(), request);
     }
 }

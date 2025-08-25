@@ -2,7 +2,9 @@ package org.info.infobaza.constants;
 
 
 import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.info.infobaza.dto.request.ExportRequest;
 import org.info.infobaza.dto.response.info.ServiceSources;
 import org.info.infobaza.service.AbstractService;
 import org.info.infobaza.service.ServiceMetadata;
@@ -19,21 +21,8 @@ public final class Dictionary {
     private static Map<String, List<Method>> activeMethodsBySource = new HashMap<>();
     private static Map<String, AbstractService> serviceBeans = new HashMap<>();
 
-
     private final ApplicationContext applicationContext;
     private ServiceSources serviceSources;
-
-    public static final List<String> VID_INCOME = List.of("Доход по данным ЕНПФ", "Доход ИП", "СГД ЮЛ", "Доход по данным ФНО", "Денежные средства",
-            "в.т.ч. Доход от ИП", "в.т.ч. Доход из источников за пределами РК", "в.т.ч. Имущественный доход",
-            "Доход от осуществления нотариуса, судебного исполнителя, адвоката, профессионального медиатора", "в.т.ч. Доход лица занимающиеся частной практикой");
-    public static final List<String> VID_ACTIVE = List.of("Ценные бумаги", "Земельный участок", "Недвижимое имущество", "Транспортные средства", "ЕНИС НОТАРИУС", "Цифровые активы",
-            "Сейфовые ячейки", "Денежные средства", "Иные имущества", "ЮЛ", "Спецтехника", "Воздушные судна", "Водный транспорт", "ЖД составы",
-            "Животные", "Золото", "Украшения", "Предметы исскуства", "Прочие активы");
-    public static final List<String> SOURCES_ACTIVE = List.of("Центральный депозитарий", "FM", "ЦУЛС", "FM-1", "FNO250", "FNO270", "ГКБ-Cведения по страховке Авто", "КАП МВД-Cведения по владельцам Авто",
-            "ЕНИС НОТАРИУС", "FNO240", "СВедения КГД МФ РК", "Сведения МСХ", "Сведения Минтранспорта", "ESF", "ЕИАС", "НАО ЦОН");
-    public static final List<String> SOURCES_INCOME = List.of("ЕНПФ", "FNO", "FNO270", "FNO200_05", "FNO240");
-    public static final List<String> TYPES_ACTIVES = List.of("Реализация", "Приобретение", "Наличие");
-
     public static final Map<String, String> SECONDARY_STATUSES = Map.of("Отправил ДС", "ДС",
             "Получил ДС", "ДС",
             "Вместе летали 3 и более раз", "Самолёт",
@@ -41,9 +30,26 @@ public final class Dictionary {
             "Налоги", "Налоги",
             "Совместные автостраховки", "Совместная страховка",
             "Вместе жили в 2 и более адресах", "Вместе жили и коммунальные платежи",
-            "Коммунальные платежи", "Вместе жили и коммунальные платежи"
+            "Коммунальные платежи", "Вместе жили и коммунальные платежи",
+            "Доверенность", "Доверенность"
     );
+    public static void generate_pdf_header(ExportRequest request,
+                                           HttpServletResponse response){
+        response.setContentType("application/pdf");
+        response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".pdf");
+    }
 
+    public static void generate_excel_header(ExportRequest request,
+                                           HttpServletResponse response){
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".xlsx");
+    }
+
+    public static void generate_word_header(ExportRequest request,
+                                           HttpServletResponse response){
+        response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".docx");
+    }
 
     private ServiceSources getDistinctSources() {
         Set<String> incomeSources = new HashSet<>();
