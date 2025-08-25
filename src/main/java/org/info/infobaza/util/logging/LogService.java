@@ -13,6 +13,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.StringTokenizer;
 import java.util.stream.Collectors;
 
 @Aspect
@@ -30,6 +31,9 @@ public class LogService {
         String httpMethod = request.getMethod();
         String uri = request.getRequestURI();
         String queryString = request.getQueryString() != null ? "?" + request.getQueryString() : "";
+        String clientIp = getClientIpAddress(request);
+
+        String userAgent = request.getHeader("User-Agent");
 
         String requestParams = Arrays.stream(joinPoint.getArgs())
                 .map(arg -> {
@@ -59,8 +63,8 @@ public class LogService {
                 })
                 .collect(Collectors.joining("; "));
 
-        String requestDetails = String.format("Controller: %s, Method: %s, HTTP: %s, URI: %s%s, Args: [%s]",
-                controllerName, methodName, httpMethod, uri, queryString, requestParams);
+        String requestDetails = String.format("Controller: %s, Method: %s, HTTP: %s, URI: %s%s, ClientIP: %s, Args: [%s]",
+                controllerName, methodName, httpMethod, uri, queryString, clientIp, requestParams);
 
         String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMATTER);
         long startTime = System.currentTimeMillis();
@@ -78,6 +82,15 @@ public class LogService {
             logger.error("{} - Request: {}, Error: {}, ExecutionTime: {}ms",
                     timestamp, requestDetails, t.getMessage(), executionTime);
             throw t;
+        }
+    }
+
+    public static String getClientIpAddress(HttpServletRequest request) {
+        String forwardHeader= request.getHeader("X-Forwarded-For");
+        if (forwardHeader == null) {
+            return request.getRemoteAddr();
+        } else {
+            return new StringTokenizer(forwardHeader, ",").nextToken().trim();
         }
     }
 }
