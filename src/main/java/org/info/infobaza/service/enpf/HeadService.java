@@ -10,6 +10,8 @@ import org.info.infobaza.model.info.job.StatusRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.util.convert.Mapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -26,7 +28,7 @@ public class HeadService {
     private final Mapper mapper;
     private final Analyzer analyzer;
 
-    public Head constructHead(String iin, String dateFrom, String dateTo) throws IOException, NotFoundException {
+    public Head constructHead(String iin, String dateFrom, String dateTo) {
         List<SupervisorRecord> supervisorRecords = getType(iin);
         List<CompanyRecord> companyRecords = new ArrayList<>();
         for (SupervisorRecord supervisorRecord : supervisorRecords) {
@@ -120,7 +122,7 @@ public class HeadService {
         }
     }
 
-    private Double getIncome(String iin, String dateFrom, String dateTo) throws IOException {
+    private Double getIncome(String iin, String dateFrom, String dateTo) {
         return analyzer.calculateTotalIncomeByIIN(iin, dateFrom, dateTo);
     }
 

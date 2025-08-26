@@ -59,7 +59,7 @@ public class InformationController {
     @LogRequest
     @PostMapping("/yearCount")
     @Cacheable(value = "yearCounts", key = "#request")
-    public ResponseEntity<YearlyRecordCounts> getYearlyRecordCounts(@RequestBody YearlyCountRequest request) throws IOException {
+    public ResponseEntity<YearlyRecordCounts> getYearlyRecordCounts(@RequestBody YearlyCountRequest request) {
         return ResponseEntity.ok(analyzer.getYearlyRecordCounts(
                 request.getIin(),
                 request.getDateFrom().toString(),

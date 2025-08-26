@@ -5,7 +5,6 @@ import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.info.infobaza.constants.Dictionary;
 import org.info.infobaza.model.dossier.User;
 import org.info.infobaza.repository.dossier.UserDossierRepository;
 import org.springframework.beans.factory.annotation.Value;

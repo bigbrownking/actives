@@ -14,20 +14,25 @@ import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
 import org.info.infobaza.dto.response.info.income.OverallIncome;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyCount;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyRecordCounts;
+import org.info.infobaza.dto.response.job.Head;
 import org.info.infobaza.dto.response.relation.RelationActive;
+import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.model.info.active_income.ActiveOverall;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.model.info.active_income.RecordDt;
 import org.info.infobaza.model.info.person.RelationRecord;
+import org.info.infobaza.service.enpf.HeadService;
 import org.info.infobaza.service.portret.PortretService;
-import org.info.infobaza.util.convert.Fetcher;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.util.convert.NumberConverter;
 import org.info.infobaza.util.convert.SQLFileUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -45,6 +50,12 @@ public class Analyzer {
     private final Mapper mapper;
     private final SQLFileUtil sqlFileUtil;
     private final NumberConverter numberConverter;
+    private HeadService headService;
+
+    @Autowired
+    public void setHeadService(@Lazy HeadService headService){
+        this.headService = headService;
+    }
 
     private static final Map<Method, AbstractService> methodToServiceCache = new ConcurrentHashMap<>();
 
@@ -108,6 +119,7 @@ public class Analyzer {
         IinInfo iinInfo = portretService.getIinInfo(iin);
         Double totalActives = calculateTotalActivesForPerson(iin, dateFrom, dateTo);
         Double totalIncomes = calculateTotalIncomeByIIN(iin, dateFrom, dateTo);
+        Head head = headService.constructHead(iin, dateFrom, dateTo);
 
         return RelationActive.builder()
                 .relation(relationRecord.getStatus())
@@ -115,6 +127,7 @@ public class Analyzer {
                 .iin(iin)
                 .actives(totalActives != null ? numberConverter.formatNumber(totalActives) : "0")
                 .incomes(totalIncomes != null ? numberConverter.formatNumber(totalIncomes) : "0")
+                .head(head)
                 .level(relationRecord.getLevel_rod())
                 .isNominal(portretService.isNominal(iin))
                 .build();
