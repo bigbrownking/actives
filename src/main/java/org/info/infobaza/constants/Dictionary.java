@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.info.infobaza.dto.request.ExportRequest;
 import org.info.infobaza.dto.response.info.ServiceSources;
-import org.info.infobaza.service.AbstractService;
+import org.info.infobaza.service.InformationalService;
 import org.info.infobaza.service.ServiceMetadata;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
@@ -19,7 +19,7 @@ import java.util.*;
 public final class Dictionary {
     private static Map<String, List<Method>> incomeMethodsBySource = new HashMap<>();
     private static Map<String, List<Method>> activeMethodsBySource = new HashMap<>();
-    private static Map<String, AbstractService> serviceBeans = new HashMap<>();
+    private static Map<String, InformationalService> serviceBeans = new HashMap<>();
 
     private final ApplicationContext applicationContext;
     private ServiceSources serviceSources;
@@ -58,9 +58,9 @@ public final class Dictionary {
         Set<String> activeVids = new HashSet<>();
         Set<String> incomeVids = new HashSet<>();
 
-        Map<String, AbstractService> serviceBeans = applicationContext.getBeansOfType(AbstractService.class);
+        Map<String, InformationalService> serviceBeans = applicationContext.getBeansOfType(InformationalService.class);
 
-        for (AbstractService service : serviceBeans.values()) {
+        for (InformationalService service : serviceBeans.values()) {
             Method[] methods = service.getClass().getDeclaredMethods();
             for (Method method : methods) {
                 ServiceMetadata annotation = method.getAnnotation(ServiceMetadata.class);
@@ -93,11 +93,11 @@ public final class Dictionary {
     @PostConstruct
     public void init() {
         serviceSources = getDistinctSources();
-        serviceBeans = applicationContext.getBeansOfType(AbstractService.class);
+        serviceBeans = applicationContext.getBeansOfType(InformationalService.class);
         incomeMethodsBySource = new HashMap<>();
         activeMethodsBySource = new HashMap<>();
 
-        for (AbstractService service : serviceBeans.values()) {
+        for (InformationalService service : serviceBeans.values()) {
             for (Method method : service.getClass().getDeclaredMethods()) {
                 ServiceMetadata metadata = method.getAnnotation(ServiceMetadata.class);
                 if (metadata != null) {
@@ -122,7 +122,7 @@ public final class Dictionary {
         return Collections.unmodifiableMap(activeMethodsBySource);
     }
 
-    public static Map<String, AbstractService> getServiceBeans() {
+    public static Map<String, InformationalService> getServiceBeans() {
         return Collections.unmodifiableMap(serviceBeans);
     }
 

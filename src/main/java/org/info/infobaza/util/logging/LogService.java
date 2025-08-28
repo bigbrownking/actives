@@ -13,8 +13,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.StringTokenizer;
 import java.util.stream.Collectors;
+
+import static org.info.infobaza.util.user.UserUtil.getClientIpAddress;
+import static org.info.infobaza.util.user.UserUtil.getCurrentHttpRequest;
 
 @Aspect
 @Component
@@ -25,15 +27,13 @@ public class LogService {
     @Around("@annotation(org.info.infobaza.util.logging.LogRequest)")
     public Object logControllerCalls(ProceedingJoinPoint joinPoint) throws Throwable {
         // Get request details
-        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
+        HttpServletRequest request = getCurrentHttpRequest();
         String controllerName = joinPoint.getSignature().getDeclaringType().getSimpleName();
         String methodName = joinPoint.getSignature().getName();
         String httpMethod = request.getMethod();
         String uri = request.getRequestURI();
         String queryString = request.getQueryString() != null ? "?" + request.getQueryString() : "";
         String clientIp = getClientIpAddress(request);
-
-        String userAgent = request.getHeader("User-Agent");
 
         String requestParams = Arrays.stream(joinPoint.getArgs())
                 .map(arg -> {
@@ -85,12 +85,5 @@ public class LogService {
         }
     }
 
-    public static String getClientIpAddress(HttpServletRequest request) {
-        String forwardHeader= request.getHeader("X-Forwarded-For");
-        if (forwardHeader == null) {
-            return request.getRemoteAddr();
-        } else {
-            return new StringTokenizer(forwardHeader, ",").nextToken().trim();
-        }
-    }
+
 }

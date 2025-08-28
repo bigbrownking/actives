@@ -2,6 +2,7 @@ package org.info.infobaza.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.Builder;
 import lombok.Getter;
 import org.info.infobaza.util.logging.Loggable;
 
@@ -9,7 +10,8 @@ import java.time.LocalDate;
 import java.util.Objects;
 
 @Getter
-public class MainRequest {
+@Builder
+public class MainRequest{
     @NotBlank(message = "IIN is required and cannot be blank")
     @Loggable
     private String iin_bin;

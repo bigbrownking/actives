@@ -2,7 +2,9 @@ package org.info.infobaza.dto.request;
 
 import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.NotBlank;
+import lombok.Builder;
 import lombok.Getter;
+import org.info.infobaza.model.main.Request;
 import org.info.infobaza.util.logging.Loggable;
 
 import java.time.LocalDate;
@@ -10,7 +12,8 @@ import java.util.List;
 import java.util.Objects;
 
 @Getter
-public class RelativesActiveRequest {
+@Builder
+public class RelativesActiveRequest extends Request {
 
     @NotBlank(message = "IIN is required and cannot be blank")
     @Loggable

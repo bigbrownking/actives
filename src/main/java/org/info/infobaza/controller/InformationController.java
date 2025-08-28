@@ -9,6 +9,7 @@ import org.info.infobaza.dto.response.info.income.IncomeResponse;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyRecordCounts;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.constants.Dictionary;
+import org.info.infobaza.service.history.HistoryService;
 import org.info.infobaza.util.logging.LogRequest;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
@@ -24,12 +25,13 @@ public class InformationController {
 
     private final Analyzer analyzer;
     private final Dictionary dictionary;
+    private final HistoryService historyService;
 
     @LogRequest
     @PostMapping("/active")
     @Cacheable(value = "actives", key = "#request")
     public ResponseEntity<ActiveResponse> getAllActivesOfPerson(@RequestBody RelativesActiveRequest request) {
-        return ResponseEntity.ok(analyzer.getAllActivesOfPersonsByDates(
+        ActiveResponse activeResponse = analyzer.getAllActivesOfPersonsByDates(
                 request.getIin(),
                 request.getDateFrom().toString(),
                 request.getDateTo().toString(),
@@ -38,14 +40,17 @@ public class InformationController {
                 request.getTypes(),
                 request.getSources(),
                 request.getIins()
-        ));
+        );
+
+        historyService.createRequest(request);
+        return ResponseEntity.ok(activeResponse);
     }
 
     @LogRequest
     @PostMapping("/income")
     @Cacheable(value = "incomes", key = "#request")
     public ResponseEntity<IncomeResponse> getAllIncomesOfPerson(@RequestBody RelativesIncomeRequest request) {
-        return ResponseEntity.ok(analyzer.getAllIncomesOfPersonsByDates(
+        IncomeResponse incomeResponse = analyzer.getAllIncomesOfPersonsByDates(
                 request.getIin(),
                 request.getDateFrom().toString(),
                 request.getDateTo().toString(),
@@ -53,7 +58,10 @@ public class InformationController {
                 request.getVids(),
                 request.getSources(),
                 request.getIins()
-        ));
+        );
+
+        historyService.createRequest(request);
+        return ResponseEntity.ok(incomeResponse);
     }
 
     @LogRequest

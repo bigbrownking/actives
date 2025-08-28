@@ -3,7 +3,7 @@ package org.info.infobaza.service.esf;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
-import org.info.infobaza.service.AbstractService;
+import org.info.infobaza.service.InformationalService;
 import org.info.infobaza.service.ServiceMetadata;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.constants.QueryLocationDictionary;
@@ -17,7 +17,7 @@ import java.util.List;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ESFService implements AbstractService {
+public class ESFService implements InformationalService {
 
     private final JdbcTemplate jdbcTemplate;
     private final SQLFileUtil sqlFileUtil;

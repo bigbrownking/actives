@@ -9,6 +9,7 @@ import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.job.StatusRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.service.Analyzer;
+import org.info.infobaza.service.portret.PortretService;
 import org.info.infobaza.util.convert.Mapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -27,6 +28,7 @@ public class HeadService {
     private final JdbcTemplate jdbcTemplate;
     private final Mapper mapper;
     private final Analyzer analyzer;
+    private final PortretService portretService;
 
     public Head constructHead(String iin, String dateFrom, String dateTo) {
         List<SupervisorRecord> supervisorRecords = getType(iin);
@@ -48,7 +50,7 @@ public class HeadService {
                 .build();
     }
 
-    private List<SupervisorRecord> getType(String iin) {
+    public List<SupervisorRecord> getType(String iin) {
         String sqlSup = "SELECT * FROM pfr_dashboard.rucovoditeli WHERE employee_iin_bin = ?";
         List<SupervisorRecord> supervisorRecordSup = new ArrayList<>();
         List<SupervisorRecord> supervisorRecordFou = new ArrayList<>();

@@ -20,11 +20,10 @@ import java.io.IOException;
 public class PortretController {
     private final PortretService portretService;
 
-
     @LogRequest
     @PostMapping("/person")
     public ResponseEntity<Person> getPortret(@RequestBody GetPortretRequest byIINRequest) throws IOException, NotFoundException {
-        return ResponseEntity.ok().body(portretService.getPerson(
+        return ResponseEntity.ok(portretService.getPerson(
                 byIINRequest.getIin()
         ));
     }

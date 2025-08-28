@@ -3,7 +3,7 @@ package org.info.infobaza.service.central_depository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
-import org.info.infobaza.service.AbstractService;
+import org.info.infobaza.service.InformationalService;
 import org.info.infobaza.service.ServiceMetadata;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.constants.QueryLocationDictionary;
@@ -17,7 +17,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class CentralDepositaryService implements AbstractService {
+public class CentralDepositaryService implements InformationalService {
     private final JdbcTemplate jdbcTemplate;
     private final SQLFileUtil sqlFileUtil;
     private final Mapper mapper;

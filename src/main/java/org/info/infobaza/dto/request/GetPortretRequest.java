@@ -1,6 +1,7 @@
 package org.info.infobaza.dto.request;
 
 import lombok.Getter;
+import org.info.infobaza.model.main.Request;
 import org.info.infobaza.util.logging.Loggable;
 
 @Getter

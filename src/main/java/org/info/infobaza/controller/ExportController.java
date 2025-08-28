@@ -9,6 +9,7 @@ import org.info.infobaza.service.export.ExcelExportService;
 import org.info.infobaza.service.export.PdfExportService;
 import org.info.infobaza.service.export.WordExportService;
 import org.info.infobaza.util.logging.LogRequest;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,25 +29,25 @@ public class ExportController {
 
     @LogRequest
     @PostMapping("/pdf")
-    public void exportToPdf(@RequestBody ExportRequest request,
+    public void exportToPdf(@RequestBody ExportRequest exportRequest,
                             HttpServletResponse response) throws IOException, DocumentException, NotFoundException {
-        generate_pdf_header(request, response);
-        pdfExportService.exportToPdf(response.getOutputStream(), request);
+        generate_pdf_header(exportRequest, response);
+        pdfExportService.exportToPdf(response.getOutputStream(), exportRequest);
     }
 
     @LogRequest
     @PostMapping("/word")
-    public void exportToWord(@RequestBody ExportRequest request,
+    public void exportToWord(@RequestBody ExportRequest exportRequest,
                              HttpServletResponse response) throws IOException, NotFoundException {
-        generate_word_header(request, response);
-        wordExportService.exportToWord(response.getOutputStream(), request);
+        generate_word_header(exportRequest, response);
+        wordExportService.exportToWord(response.getOutputStream(), exportRequest);
     }
 
     @LogRequest
     @PostMapping("/excel")
-    public void exportToExcel(@RequestBody ExportRequest request,
+    public void exportToExcel(@RequestBody ExportRequest exportRequest,
                               HttpServletResponse response) throws IOException, NotFoundException {
-        generate_excel_header(request, response);
-        excelExportService.exportToExcel(response.getOutputStream(), request);
+        generate_excel_header(exportRequest, response);
+        excelExportService.exportToExcel(response.getOutputStream(), exportRequest);
     }
 }

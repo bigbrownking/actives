@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.constants.Dictionary;
 import org.info.infobaza.constants.QueryLocationDictionary;
+import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.dto.response.info.RecordGroup;
 import org.info.infobaza.dto.response.info.active.ActiveResponse;
@@ -14,15 +15,15 @@ import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
 import org.info.infobaza.dto.response.info.income.OverallIncome;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyCount;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyRecordCounts;
-import org.info.infobaza.dto.response.job.Head;
 import org.info.infobaza.dto.response.relation.RelationActive;
-import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.model.info.active_income.ActiveOverall;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.model.info.active_income.RecordDt;
+import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.model.info.person.RelationRecord;
 import org.info.infobaza.service.enpf.HeadService;
+import org.info.infobaza.service.history.HistoryService;
 import org.info.infobaza.service.portret.PortretService;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.util.convert.NumberConverter;
@@ -32,7 +33,6 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -45,22 +45,23 @@ import java.util.stream.Stream;
 @Slf4j
 @RequiredArgsConstructor
 public class Analyzer {
+    private HeadService headService;
+    private final HistoryService historyService;
     private final PortretService portretService;
     private final JdbcTemplate jdbcTemplate;
     private final Mapper mapper;
     private final SQLFileUtil sqlFileUtil;
     private final NumberConverter numberConverter;
-    private HeadService headService;
 
     @Autowired
     public void setHeadService(@Lazy HeadService headService){
         this.headService = headService;
     }
 
-    private static final Map<Method, AbstractService> methodToServiceCache = new ConcurrentHashMap<>();
+    private static final Map<Method, InformationalService> methodToServiceCache = new ConcurrentHashMap<>();
 
     static {
-        for (AbstractService service : Dictionary.getServiceBeans().values()) {
+        for (InformationalService service : Dictionary.getServiceBeans().values()) {
             for (Method method : service.getClass().getDeclaredMethods()) {
                 if (method.getAnnotation(ServiceMetadata.class) != null) {
                     methodToServiceCache.put(method, service);
@@ -119,7 +120,7 @@ public class Analyzer {
         IinInfo iinInfo = portretService.getIinInfo(iin);
         Double totalActives = calculateTotalActivesForPerson(iin, dateFrom, dateTo);
         Double totalIncomes = calculateTotalIncomeByIIN(iin, dateFrom, dateTo);
-        Head head = headService.constructHead(iin, dateFrom, dateTo);
+        List<SupervisorRecord> head = headService.getType(iin);
 
         return RelationActive.builder()
                 .relation(relationRecord.getStatus())
@@ -229,7 +230,7 @@ public class Analyzer {
                             if (types != null && !types.isEmpty() && Arrays.stream(metadata.type()).noneMatch(types::contains))
                                 continue;
 
-                            AbstractService service = methodToServiceCache.get(method);
+                            InformationalService service = methodToServiceCache.get(method);
                             if (service == null) {
                                 log.error("Service not found for method {}", method.getName());
                                 continue;

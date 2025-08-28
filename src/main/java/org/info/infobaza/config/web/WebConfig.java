@@ -62,6 +62,8 @@ public class WebConfig {
                         .requestMatchers("/portret/**").permitAll()
                         .requestMatchers("/job/**").permitAll()
                         .requestMatchers("/export/**").permitAll()
+                        .requestMatchers("/admin/**").permitAll()
+                        .requestMatchers("/history/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .anyRequest().authenticated()
                 )
@@ -126,7 +128,8 @@ public class WebConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("https://aktivy.afm.gov.kz", "http://192.168.30.153:3000"));
+        //config.setAllowedOriginPatterns(List.of("https://aktivy.afm.gov.kz", "http://192.168.30.153:3000"));
+        config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowCredentials(true);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
