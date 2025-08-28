@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Objects;
 
 @Getter
-@Builder
 public class RelativesActiveRequest extends Request {
 
     @NotBlank(message = "IIN is required and cannot be blank")
