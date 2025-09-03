@@ -65,4 +65,8 @@ public class Request {
     @CollectionTable(name = "actives_request_iins", joinColumns = @JoinColumn(name = "request_id"))
     @Column(name = "iin")
     private List<String> iins;
+
+    @Column(name = "status", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private RequestStatus status;
 }

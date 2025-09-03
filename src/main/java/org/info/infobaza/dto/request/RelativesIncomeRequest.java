@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Builder;
 import lombok.Getter;
 import org.info.infobaza.model.main.Request;
+import org.info.infobaza.model.main.RequestStatus;
 import org.info.infobaza.util.logging.Loggable;
 
 import java.time.LocalDate;
@@ -12,7 +13,7 @@ import java.util.List;
 import java.util.Objects;
 
 @Getter
-public class RelativesIncomeRequest extends Request {
+public class RelativesIncomeRequest{
     @NotBlank(message = "IIN is required and cannot be blank")
     @Loggable
     private String iin;
@@ -59,4 +60,14 @@ public class RelativesIncomeRequest extends Request {
     public int hashCode() {
         return Objects.hash(iin, dateFrom, dateTo, years, vids, sources, iins);
     }
+
+//    @Override
+//    public List<String> getTypes() {
+//        return null;
+//    }
+//
+//    @Override
+//    public RequestStatus getStatus() {
+//        return RequestStatus.INCOME;
+//    }
 }

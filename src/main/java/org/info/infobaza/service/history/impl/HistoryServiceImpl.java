@@ -2,17 +2,21 @@ package org.info.infobaza.service.history.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.info.infobaza.dto.request.HistoryRequest;
+import org.info.infobaza.dto.request.RelativesActiveRequest;
+import org.info.infobaza.dto.request.RelativesIncomeRequest;
+import org.info.infobaza.dto.request.RequestDto;
 import org.info.infobaza.model.main.Request;
+import org.info.infobaza.model.main.RequestStatus;
 import org.info.infobaza.repository.main.RequestRepository;
 import org.info.infobaza.service.history.HistoryService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 
 import static org.info.infobaza.util.convert.JpaPageable.createPageableSorted;
 import static org.info.infobaza.util.user.UserUtil.*;
@@ -37,10 +41,11 @@ public class HistoryServiceImpl implements HistoryService {
     }
 
     @Override
-    public Request createRequest(Request request) {
+    @Transactional
+    public Request createRequest(RequestDto request) {
         return requestRepository.save(Request.builder()
                 .user(getCurrentUser())
-                .iinBin(request.getIinBin())
+                .iinBin(request.getIin())
                 .dateFrom(request.getDateFrom())
                 .dateTo(request.getDateTo())
                 .clientIp(getClientIpAddress(getCurrentHttpRequest()))
@@ -50,6 +55,7 @@ public class HistoryServiceImpl implements HistoryService {
                 .types(request.getTypes())
                 .sources(request.getSources())
                 .iins(request.getIins())
+                .status(request.getStatus())
                 .build());
     }
 
@@ -59,5 +65,10 @@ public class HistoryServiceImpl implements HistoryService {
                 createPageableSorted(
                         page, size,
                         Sort.by("timestamp").descending()));
+    }
+
+    @Override
+    public void deleteAllRequests() {
+        requestRepository.deleteAll();
     }
 }

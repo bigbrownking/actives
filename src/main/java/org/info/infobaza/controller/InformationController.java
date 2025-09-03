@@ -42,7 +42,7 @@ public class InformationController {
                 request.getIins()
         );
 
-        historyService.createRequest(request);
+       // historyService.createRequest(request);
         return ResponseEntity.ok(activeResponse);
     }
 
@@ -60,7 +60,7 @@ public class InformationController {
                 request.getIins()
         );
 
-        historyService.createRequest(request);
+       // historyService.createRequest(request);
         return ResponseEntity.ok(incomeResponse);
     }
 
