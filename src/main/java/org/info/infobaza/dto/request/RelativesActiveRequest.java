@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Objects;
 
 @Getter
-public class RelativesActiveRequest {
+public class RelativesActiveRequest implements RequestDto{
 
     @NotBlank(message = "IIN is required and cannot be blank")
     @Loggable
@@ -67,8 +67,8 @@ public class RelativesActiveRequest {
         return Objects.hash(iin, dateFrom, dateTo, years, vids, types, sources, iins);
     }
 
-//    @Override
-//    public RequestStatus getStatus() {
-//        return RequestStatus.ACTIVE;
-//    }
+    @Override
+    public RequestStatus getStatus() {
+        return RequestStatus.ACTIVE;
+    }
 }

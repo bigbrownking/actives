@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Objects;
 
 @Getter
-public class RelativesIncomeRequest{
+public class RelativesIncomeRequest implements RequestDto{
     @NotBlank(message = "IIN is required and cannot be blank")
     @Loggable
     private String iin;
@@ -61,13 +61,13 @@ public class RelativesIncomeRequest{
         return Objects.hash(iin, dateFrom, dateTo, years, vids, sources, iins);
     }
 
-//    @Override
-//    public List<String> getTypes() {
-//        return null;
-//    }
-//
-//    @Override
-//    public RequestStatus getStatus() {
-//        return RequestStatus.INCOME;
-//    }
+    @Override
+    public List<String> getTypes() {
+        return null;
+    }
+
+    @Override
+    public RequestStatus getStatus() {
+        return RequestStatus.INCOME;
+    }
 }
