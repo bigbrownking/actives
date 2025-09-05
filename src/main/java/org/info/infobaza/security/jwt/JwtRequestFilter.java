@@ -25,16 +25,6 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        String path = request.getRequestURI();
-
-        if (path.startsWith("/auth/") || path.startsWith("/info/") ||
-                path.startsWith("/relation/") || path.startsWith("/portret/") ||
-                path.startsWith("/job/") || path.startsWith("/v3/api-docs") ||
-                path.startsWith("/swagger-ui")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
         try {
             String jwt = parseJwt(request);
             if (jwt != null && jwtTokenUtil.validateSSOToken(jwt)) {

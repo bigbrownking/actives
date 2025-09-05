@@ -13,7 +13,7 @@ public class InformationRecordDt implements RecordDt {
     private String iin_bin;
     private LocalDate date;
     private String database;
-    private String aktyvy;
+    private String aktivy;
     private String oper;
     private String dopinfo;
     private String summ;
@@ -26,5 +26,10 @@ public class InformationRecordDt implements RecordDt {
         this.oper = oper;
         this.dopinfo = dopinfo;
         this.summ = summ;
+    }
+
+    @Override
+    public String getNum_doc() {
+        return null;
     }
 }

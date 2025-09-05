@@ -9,4 +9,6 @@ public interface RecordDt {
     String getOper();
     String getDopinfo();
     String getSumm();
+    String getAktivy();
+    String getNum_doc();
 }

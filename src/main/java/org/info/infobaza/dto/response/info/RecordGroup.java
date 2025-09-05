@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -14,5 +15,6 @@ public class RecordGroup {
     private String totalSum;
     private String oper;
     private String iinsInvolved;
+    private Map<String, String> aktivyTypeCounts;
     private String info;
 }

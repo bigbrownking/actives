@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.constants.Dictionary;
 import org.info.infobaza.constants.QueryLocationDictionary;
-import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.dto.response.info.RecordGroup;
 import org.info.infobaza.dto.response.info.active.ActiveResponse;
@@ -46,7 +45,6 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class Analyzer {
     private HeadService headService;
-    private final HistoryService historyService;
     private final PortretService portretService;
     private final JdbcTemplate jdbcTemplate;
     private final Mapper mapper;
@@ -293,7 +291,7 @@ public class Analyzer {
                             .date(record.getDate())
                             .database(record.getDatabase())
                             .oper(record.getOper())
-                            .aktyvy(record.getAktyvy())
+                            .aktivy(record.getAktivy())
                             .dopinfo(record.getDopinfo())
                             .summ(record.getSumm() != null ? numberConverter.formatNumber(record.getSumm()) : null)
                             .build())
@@ -535,7 +533,7 @@ public class Analyzer {
     }
     private String getAktyvyValue(RecordDt record) {
         if (record instanceof InformationRecordDt infoRecord) {
-            return infoRecord.getAktyvy();
+            return infoRecord.getAktivy();
         } else if (record instanceof ESFInformationRecordDt esfRecord) {
             return esfRecord.getAktivy();
         }
@@ -650,6 +648,25 @@ public class Analyzer {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         StringBuilder info = buildInfoString(iinSums, iinToFio, iins, records.stream().findFirst().map(RecordDt::getIin_bin).orElse(null));
+        List<RecordDt> yearRecords = records.stream()
+                .filter(record -> String.valueOf(record.getDate().getYear()).equals(year))
+                .toList();
+
+        Map<String, String> aktivyTypeCounts = new HashMap<>();
+        Map<String, Integer> tempCounts = new HashMap<>();
+        for (RecordDt record : yearRecords) {
+            String aktivy = record.getAktivy();
+            String database = record.getDatabase();
+            if (aktivy == null || database == null) {
+                continue;
+            }
+            String dopinfo = record.getDopinfo();
+            String type = extractTypeFromDopinfo(aktivy, dopinfo);
+            String key = String.format("%s|%s|%s", database, aktivy, type != null && !type.isEmpty() ? type : "");
+            tempCounts.merge(key, 1, Integer::sum);
+        }
+
+        tempCounts.forEach((key, count) -> aktivyTypeCounts.put(key, count.toString()));
 
         return RecordGroup.builder()
                 .year(year)
@@ -657,6 +674,7 @@ public class Analyzer {
                 .oper(oper)
                 .info(!info.isEmpty() ? info.toString() : null)
                 .iinsInvolved(iinsInvolved.isEmpty() ? null : iinsInvolved)
+                .aktivyTypeCounts(aktivyTypeCounts)
                 .build();
     }
 
@@ -670,7 +688,7 @@ public class Analyzer {
                                         return InformationRecordDt.builder()
                                                 .iin_bin(info.getIin_bin())
                                                 .date(info.getDate())
-                                                .aktyvy(info.getAktyvy())
+                                                .aktivy(info.getAktivy())
                                                 .database(info.getDatabase())
                                                 .oper(info.getOper())
                                                 .dopinfo(info.getDopinfo())
@@ -694,6 +712,152 @@ public class Analyzer {
                                 })
                                 .collect(Collectors.toList())
                 ));
+    }
+    private String extractTypeFromDopinfo(String aktivy, String dopinfo) {
+        if (dopinfo == null || dopinfo.isEmpty()) {
+            return null;
+        }
+        String type = null;
+        if ("Недвижимое имущество".equals(aktivy)) {
+            int startIndex = dopinfo.indexOf("Вид недвижимости:");
+            if (startIndex != -1) {
+                startIndex += "Вид недвижимости:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                if (endIndex != -1) {
+                    type = dopinfo.substring(startIndex, endIndex).trim();
+                } else {
+                    type = dopinfo.substring(startIndex).trim();
+                }
+            }else{
+                startIndex = dopinfo.indexOf("Описание:");
+                if (startIndex != -1) {
+                    startIndex += "Описание:".length();
+                    int endIndex = dopinfo.indexOf(";", startIndex);
+                    type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
+                }
+            }
+        } else if ("Транспортные средства".equals(aktivy) || "ГКБ-Транспортные средства".equals(aktivy)) {
+            int startIndex = dopinfo.indexOf("Авто:");
+            if (startIndex != -1) {
+                startIndex += "Авто:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
+            } else {
+                startIndex = dopinfo.indexOf("Описание:");
+                if (startIndex != -1) {
+                    startIndex += "Описание:".length();
+                    int endIndex = dopinfo.indexOf(";", startIndex);
+                    type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
+                }
+            }
+        }else if("Административный штраф".equals(aktivy)){
+            int startIndex = dopinfo.indexOf("Был совершен штраф:");
+            if (startIndex != -1) {
+                startIndex += "Был совершен штраф:".length();
+                int endIndex = dopinfo.length();
+                type = dopinfo.substring(startIndex, endIndex).trim();
+            }
+        }else if("Животные".equals(aktivy) || "Предметы исскуства".equals(aktivy)){
+            int startIndex = dopinfo.indexOf("Описание:");
+            if (startIndex != -1) {
+                startIndex += "Описание:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                if (endIndex != -1) {
+                    type = dopinfo.substring(startIndex, endIndex).trim();
+                } else {
+                    type = dopinfo.substring(startIndex).trim();
+                }
+            }
+        }else if("Прочие активы".equals(aktivy)){
+            int startIndex = dopinfo.indexOf("Описание:");
+            if (startIndex != -1) {
+                startIndex += "Описание:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                if (endIndex != -1) {
+                    type = dopinfo.substring(startIndex, endIndex).trim();
+                } else {
+                    type = dopinfo.substring(startIndex).trim();
+                }
+            } else {
+                startIndex = dopinfo.indexOf("Наименование и коды стран:");
+                if (startIndex != -1) {
+                    startIndex += "Наименование и коды стран:".length();
+                    int endIndex = dopinfo.indexOf(";", startIndex);
+                    type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
+                }
+            }
+        }
+        else if ("ЖД составы".equals(aktivy)) {
+            int startIndex = dopinfo.indexOf("Тип жд состава:");
+            if (startIndex != -1) {
+                startIndex += "Тип жд состава:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                if (endIndex != -1) {
+                    type = dopinfo.substring(startIndex, endIndex).trim();
+                } else {
+                    type = dopinfo.substring(startIndex).trim();
+                }
+            }
+        }else if("Ценные бумаги".equals(aktivy)){
+            int startIndex = dopinfo.indexOf("Намиенование акции:");
+            if (startIndex != -1) {
+                startIndex += "Намиенование акции:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                if (endIndex != -1) {
+                    type = dopinfo.substring(startIndex, endIndex).trim();
+                } else {
+                    type = dopinfo.substring(startIndex).trim();
+                }
+            }
+        }else if("Спецтехника".equals(aktivy)){
+            int startIndex = dopinfo.indexOf("Вид:");
+            if (startIndex != -1) {
+                startIndex += "Вид:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
+            }
+        }else if("Воздушные судна".equals(aktivy)){
+            int startIndex = dopinfo.indexOf("Тип ВС:");
+            if (startIndex != -1) {
+                startIndex += "Тип ВС:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
+            }
+        }else if("ЮЛ".equals(aktivy)){
+            int startIndex = dopinfo.indexOf("Намиенование ЮЛ:");
+            if (startIndex != -1) {
+                startIndex += "Намиенование ЮЛ:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                if (endIndex != -1) {
+                    type = dopinfo.substring(startIndex, endIndex).trim();
+                } else {
+                    type = dopinfo.substring(startIndex).trim();
+                }
+            }
+        }else if("Водный транспорт".equals(aktivy)){
+            int startIndex = dopinfo.indexOf("Тип судна:");
+            if (startIndex != -1) {
+                startIndex += "Тип судна:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                if (endIndex != -1) {
+                    type = dopinfo.substring(startIndex, endIndex).trim();
+                } else {
+                    type = dopinfo.substring(startIndex).trim();
+                }
+            }
+        }else if("Иные имущества".equals(aktivy)){
+            int startIndex = dopinfo.indexOf("Наименование и коды стран:");
+            if (startIndex != -1) {
+                startIndex += "Наименование и коды стран:".length();
+                int endIndex = dopinfo.indexOf(";", startIndex);
+                if (endIndex != -1) {
+                    type = dopinfo.substring(startIndex, endIndex).trim();
+                } else {
+                    type = dopinfo.substring(startIndex).trim();
+                }
+            }
+        }
+        return type;
     }
 
     public double calculateTotalIncomeByIIN(String iin, String dateFrom, String dateTo) {

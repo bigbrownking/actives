@@ -60,7 +60,8 @@ public enum QueryLocationDictionary {
     ЕИАС_Украшения_и_золото("sql/ЕИАС/Украшения_и_золото.sql"),
     ЕИАС_Ценные_бумаги("sql/ЕИАС/Ценные_бумаги.sql"),
     ЕИАС_Цифровые_активы("sql/ЕИАС/Цифровые_активы.sql"),
-    Money_money("sql/Money/money.sql");
+    Money_money("sql/Money/money.sql"),
+    Административные_штрафы("sql/Административные штрафы/административные_штрафы.sql");
 
     private final String path;
 

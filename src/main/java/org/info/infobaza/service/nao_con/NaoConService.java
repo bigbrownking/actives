@@ -27,6 +27,7 @@ public class NaoConService implements InformationalService {
     @ServiceMetadata(
             source = {"НАО ЦОН"},
             vids = {"Недвижимое имущество"},
+            type = {"Реализация", "Приобретение"},
             isActive = true
     )
     public List<ESFInformationRecordDt> getNaoConHouse(String iin, String dateFrom, String dateTo) throws IOException {
