@@ -8,6 +8,7 @@ import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.job.StatusRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
+import org.info.infobaza.model.info.job.TurnoverRecord;
 import org.info.infobaza.model.info.person.nominal.NominalFiz;
 import org.info.infobaza.model.info.person.nominal.NominalUl;
 import org.info.infobaza.model.info.person.PersonRecord;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
@@ -184,6 +186,16 @@ public class Mapper {
                 rs.getInt("summ"),
                 rs.getString("IIN_SELLER"),
                 rs.getInt("total_turnover")
+        );
+    }
+    public TurnoverRecord mapRowToTurnover(ResultSet rs, int rowNum) throws SQLException {
+        return new TurnoverRecord(
+               rs.getInt("OPER_TENGE_AMOUNT"),
+               rs.getObject("DATE_OPER", LocalDateTime.class),
+               rs.getString("MEMBER_MAINCODE"),
+               rs.getString("MEMBER_BANK_NAME"),
+               rs.getString("MEMBER_BANK_ACCOUNT"),
+               rs.getString("dopinfo")
         );
     }
 
