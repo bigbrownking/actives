@@ -6,9 +6,7 @@ import org.info.infobaza.constants.Dictionary;
 import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.dto.response.info.RecordGroup;
-import org.info.infobaza.dto.response.info.active.ActiveResponse;
-import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
-import org.info.infobaza.dto.response.info.active.OverallActive;
+import org.info.infobaza.dto.response.info.active.*;
 import org.info.infobaza.dto.response.info.income.IncomeResponse;
 import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
 import org.info.infobaza.dto.response.info.income.OverallIncome;
@@ -268,6 +266,8 @@ public class Analyzer {
             incomeWithRecords.setIinToRelation(filteredIinToRelation);
         } else if (result instanceof OverallIncome overallIncome) {
             overallIncome.setIinToRelation(filteredIinToRelation);
+        } else if (result instanceof ActiveCounts activeCounts) {
+            activeCounts.setIinToRelation(filteredIinToRelation);
         } else {
             throw new IllegalStateException("Unexpected return type: " + result.getClass().getName());
         }
@@ -648,25 +648,6 @@ public class Analyzer {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         StringBuilder info = buildInfoString(iinSums, iinToFio, iins, records.stream().findFirst().map(RecordDt::getIin_bin).orElse(null));
-        List<RecordDt> yearRecords = records.stream()
-                .filter(record -> String.valueOf(record.getDate().getYear()).equals(year))
-                .toList();
-
-        Map<String, String> aktivyTypeCounts = new HashMap<>();
-        Map<String, Integer> tempCounts = new HashMap<>();
-        for (RecordDt record : yearRecords) {
-            String aktivy = record.getAktivy();
-            String database = record.getDatabase();
-            if (aktivy == null || database == null) {
-                continue;
-            }
-            String dopinfo = record.getDopinfo();
-            String type = extractTypeFromDopinfo(aktivy, dopinfo);
-            String key = String.format("%s|%s|%s", database, aktivy, type != null && !type.isEmpty() ? type : "");
-            tempCounts.merge(key, 1, Integer::sum);
-        }
-
-        tempCounts.forEach((key, count) -> aktivyTypeCounts.put(key, count.toString()));
 
         return RecordGroup.builder()
                 .year(year)
@@ -674,7 +655,6 @@ public class Analyzer {
                 .oper(oper)
                 .info(!info.isEmpty() ? info.toString() : null)
                 .iinsInvolved(iinsInvolved.isEmpty() ? null : iinsInvolved)
-                .aktivyTypeCounts(aktivyTypeCounts)
                 .build();
     }
 
@@ -957,6 +937,92 @@ public class Analyzer {
                 )
                 .sorted(Comparator.comparing(YearlyCount::getYear))
                 .collect(Collectors.toList());
+    }
+
+    public ActiveResponse getAllActiveCountsOfPersonsByDates(String iin, String dateFrom, String dateTo,
+                                                        List<String> years, List<String> vids,
+                                                        List<String> types, List<String> sources,
+                                                        List<String> iins) {
+        List<InformationRecordDt> allInfoRecords = new ArrayList<>();
+        List<ESFInformationRecordDt> allEsfRecords = new ArrayList<>();
+        Map<String, List<String>> filteredIinToRelation = populateIinToRelation(iin, iins);
+
+        List<String> involvedIins = new ArrayList<>(iins != null ? iins.size() + 1 : 1);
+        involvedIins.add(iin);
+        if (iins != null) involvedIins.addAll(iins);
+
+        Set<String> targetSources = sources != null && !sources.isEmpty()
+                ? new HashSet<>(sources)
+                : Dictionary.getActiveMethodsBySource().keySet();
+
+        processRecords(involvedIins, dateFrom, dateTo, years, targetSources, vids, types,
+                allInfoRecords, allEsfRecords, true);
+
+        ActiveResponse activeResult = toActiveCount(keepDistinctInfo(allInfoRecords),
+                keepDistinctEsf(allEsfRecords),
+                dateFrom, dateTo, years, involvedIins);
+        setIinToRelation(activeResult, filteredIinToRelation);
+        return activeResult;
+    }
+
+    public ActiveResponse toActiveCount(List<InformationRecordDt> informationRecords,
+                                        List<ESFInformationRecordDt> esfInformationRecords,
+                                        String dateFrom, String dateTo, List<String> years, List<String> iins) {
+        boolean isSummaryMode = years == null || years.isEmpty();
+        List<RecordDt> allRecords = Stream.concat(
+                        informationRecords == null ? Stream.empty() : informationRecords.stream(),
+                        esfInformationRecords == null ? Stream.empty() : esfInformationRecords.stream()
+                )
+                .filter(Objects::nonNull)
+                .filter(record -> record.getDate() != null && record.getOper() != null)
+                .filter(record -> isSummaryMode || years.contains(String.valueOf(record.getDate().getYear())))
+                .sorted(Comparator.comparing(RecordDt::getDate, Comparator.nullsLast(Comparator.naturalOrder())))
+                .distinct()
+                .collect(Collectors.toList());
+
+        log.info("ALL RECORDS SIZE: {}", allRecords.size());
+        List<RecordDt> deduplicatedRecords = deduplicateRecords(allRecords);
+        if (deduplicatedRecords.isEmpty()) {
+            log.warn("No records provided for date range {} to {}, years: {}", dateFrom, dateTo, years);
+            return ActiveCounts.builder()
+                    .dateFrom(dateFrom)
+                    .dateTo(dateTo)
+                    .selectedYears(years)
+                    .aktivyTypeCounts(new ArrayList<>())
+                    .build();
+        }
+        log.info("AFTER DEDUPLICATION: {}", deduplicatedRecords.size());
+
+        List<ActiveCountGroup> aktivyTypeCounts = deduplicatedRecords.stream()
+                .filter(record -> record.getDatabase() != null && record.getAktivy() != null)
+                .collect(Collectors.groupingBy(
+                        record -> {
+                            String type = extractTypeFromDopinfo(record.getAktivy(), record.getDopinfo());
+                            return String.format("%s|%s|%s",
+                                    record.getDatabase(),
+                                    record.getAktivy(),
+                                    type != null && !type.isEmpty() ? type : "");
+                        }
+                ))
+                .entrySet().stream()
+                .map(entry -> {
+                    String[] parts = entry.getKey().split("\\|");
+                    return ActiveCountGroup.builder()
+                            .database(parts[0])
+                            .aktivy(parts[1])
+                            .type(parts.length > 2 ? parts[2] : "")
+                            .count(entry.getValue().size())
+                            .records(entry.getValue())
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        return ActiveCounts.builder()
+                .dateFrom(dateFrom)
+                .dateTo(dateTo)
+                .selectedYears(years)
+                .aktivyTypeCounts(aktivyTypeCounts)
+                .build();
     }
     public static List<InformationRecordDt> keepDistinctInfo(List<InformationRecordDt> informationRecords) {
         return informationRecords.stream().distinct().collect(Collectors.toList());

@@ -47,6 +47,25 @@ public class InformationController {
     }
 
     @LogRequest
+    @PostMapping("/activeCounts")
+    @Cacheable(value = "activeCounts", key = "#request")
+    public ResponseEntity<ActiveResponse> getAllActiveCountsOfPerson(@RequestBody RelativesActiveRequest request) {
+        ActiveResponse activeResponse = analyzer.getAllActiveCountsOfPersonsByDates(
+                request.getIin(),
+                request.getDateFrom().toString(),
+                request.getDateTo().toString(),
+                request.getYears(),
+                request.getVids(),
+                request.getTypes(),
+                request.getSources(),
+                request.getIins()
+        );
+
+        // historyService.createRequest(request);
+        return ResponseEntity.ok(activeResponse);
+    }
+
+    @LogRequest
     @PostMapping("/income")
     @Cacheable(value = "incomes", key = "#request")
     public ResponseEntity<IncomeResponse> getAllIncomesOfPerson(@RequestBody RelativesIncomeRequest request) {

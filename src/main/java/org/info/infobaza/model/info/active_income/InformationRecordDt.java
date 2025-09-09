@@ -27,9 +27,4 @@ public class InformationRecordDt implements RecordDt {
         this.dopinfo = dopinfo;
         this.summ = summ;
     }
-
-    @Override
-    public String getNum_doc() {
-        return null;
-    }
 }

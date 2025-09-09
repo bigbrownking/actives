@@ -15,6 +15,5 @@ public class RecordGroup {
     private String totalSum;
     private String oper;
     private String iinsInvolved;
-    private Map<String, String> aktivyTypeCounts;
     private String info;
 }

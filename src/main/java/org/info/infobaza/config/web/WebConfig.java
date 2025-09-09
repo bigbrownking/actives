@@ -56,6 +56,11 @@
                     .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                     .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .authorizeHttpRequests(auth -> auth
+                            .requestMatchers("/info/sourcesIncome").permitAll()
+                            .requestMatchers("/info/vidIncome").permitAll()
+                            .requestMatchers("/info/sourcesActive").permitAll()
+                            .requestMatchers("/info/typesActive").permitAll()
+                            .requestMatchers("/info/vidActive").permitAll()
                             .requestMatchers("/auth/fetchTokenCookieAndGetAccess").permitAll()
                             .requestMatchers(new CustomRequestMatcher("http://192.168.30.153:3000")).permitAll()
                             .anyRequest().permitAll()
