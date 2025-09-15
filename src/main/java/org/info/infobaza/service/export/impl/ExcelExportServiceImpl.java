@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.ClientAnchor;
 import org.apache.poi.xssf.usermodel.*;
 import org.info.infobaza.dto.request.ExportRequest;
-import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
 import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
 import org.info.infobaza.dto.response.job.Head;
@@ -51,8 +50,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
 
     @Override
     public void exportToExcel(OutputStream outputStream, ExportRequest request) throws IOException, NotFoundException {
-        XSSFWorkbook workbook = new XSSFWorkbook();
-        try {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             XSSFSheet sheet = workbook.createSheet("Person Report");
             int rowIndex = 0;
 
@@ -113,11 +111,6 @@ public class ExcelExportServiceImpl implements ExcelExportService {
 
             // Write to output stream
             workbook.write(outputStream);
-        } catch (NotFoundException e) {
-            log.error("Data not found: ", e);
-            throw e;
-        } finally {
-            workbook.close();
         }
     }
 

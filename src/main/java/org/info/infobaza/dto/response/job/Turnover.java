@@ -10,8 +10,4 @@ import lombok.Setter;
 public class Turnover {
     private String bank;
     private String account;
-    private long summ;
-    private long positiveSumm;
-    private long negativeSumm;
-    private int count;
 }

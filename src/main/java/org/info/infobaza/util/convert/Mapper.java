@@ -5,10 +5,7 @@ import org.info.infobaza.model.info.active_income.ActiveOverall;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
 import org.info.infobaza.model.info.active_income.EsfOverall;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
-import org.info.infobaza.model.info.job.CompanyRecord;
-import org.info.infobaza.model.info.job.StatusRecord;
-import org.info.infobaza.model.info.job.SupervisorRecord;
-import org.info.infobaza.model.info.job.TurnoverRecord;
+import org.info.infobaza.model.info.job.*;
 import org.info.infobaza.model.info.person.nominal.NominalFiz;
 import org.info.infobaza.model.info.person.nominal.NominalUl;
 import org.info.infobaza.model.info.person.PersonRecord;
@@ -18,7 +15,6 @@ import org.springframework.stereotype.Component;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
@@ -190,13 +186,24 @@ public class Mapper {
     }
     public TurnoverRecord mapRowToTurnover(ResultSet rs, int rowNum) throws SQLException {
         return new TurnoverRecord(
-               rs.getInt("OPER_TENGE_AMOUNT"),
-               rs.getObject("DATE_OPER", LocalDateTime.class),
-               rs.getString("MEMBER_MAINCODE"),
-               rs.getString("MEMBER_BANK_NAME"),
-               rs.getString("MEMBER_BANK_ACCOUNT"),
-               rs.getString("dopinfo")
+               rs.getString("iin_bin"),
+               rs.getString("bank_name"),
+               rs.getString("bank_account"),
+               rs.getString("summ")
         );
+    }
+    public HistorySupervisorRecord mapRowToHistorySupervisor(ResultSet rs, int rowNum) throws SQLException {
+        try {
+            return HistorySupervisorRecord.builder()
+                    .iinBinCompany(rs.getString("iin_bin_company"))
+                    .iinBin(rs.getString("iin_bin_ruk"))
+                    .build();
+        }catch (Exception e){
+            return HistorySupervisorRecord.builder()
+                    .iinBinCompany(rs.getString("iin_bin_company"))
+                    .iinBin(rs.getString("iin_bin_uchr"))
+                    .build();
+        }
     }
 
 }

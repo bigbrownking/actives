@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.info.infobaza.constants.Dictionary.SECONDARY_STATUSES;
 import static org.info.infobaza.service.Analyzer.keepDistinctRelations;
 
 @Service
@@ -49,9 +50,6 @@ public class RelationService {
     }
 
     public RelationActiveWithTypes getSecondaryRelationsOfPerson(String iin, String dateFrom, String dateTo) throws IOException {
-        if (iin == null || iin.trim().isEmpty()) {
-            throw new IllegalArgumentException("IIN cannot be null or empty");
-        }
         log.info("Fetching secondary relations for IIN: {}", iin);
         String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Связи_Косвенные.getPath(), iin);
         List<RelationRecord> relations = jdbcTemplate.query(sql, mapper::mapRowToRelation);
@@ -65,8 +63,27 @@ public class RelationService {
         List<RelationRecord> processedRelations = groupedRelations.entrySet().stream()
                 .map(entry -> {
                     String iin2 = entry.getKey();
-                    List<String> statuses = entry.getValue();
-                    String concatenatedStatus = String.join(", ", statuses);
+                    List<String> rawStatuses = entry.getValue();
+                    Set<String> uniqueStatuses = new LinkedHashSet<>(rawStatuses);
+                    List<String> statuses = new ArrayList<>(uniqueStatuses);
+
+                    List<String> processedStatuses = statuses.stream().map(status -> {
+                        if (status.startsWith("Доверенность")) {
+                            Optional<RelationRecord> matchingRecord = relations.stream()
+                                    .filter(r -> r.getIin_2().equals(iin2) && r.getStatus().equals(status))
+                                    .findFirst();
+                            String vidSviazi = matchingRecord.map(RelationRecord::getVid_sviazi).get();
+                            int iinPos = vidSviazi.indexOf(iin);
+                            if (iinPos >= 0) {
+                                return "Доверитель";
+                            } else {
+                                return "Поверенный";
+                            }
+                        }
+                        return status;
+                    }).collect(Collectors.toList());
+
+                    String concatenatedStatus = String.join(", ", processedStatuses);
                     RelationRecord representative = relations.stream()
                             .filter(r -> r.getIin_2().equals(iin2))
                             .findFirst()
@@ -80,13 +97,12 @@ public class RelationService {
                 .distinct()
                 .collect(Collectors.toList());
 
-
         List<RelationActive> relationActives = analyzer.toRelationActives(keepDistinctRelations(processedRelations), dateFrom, dateTo);
         Map<String, List<RelationActive>> typeToRelation = new HashMap<>();
         for (RelationRecord rr : processedRelations) {
             String status = rr.getStatus();
             String firstStatus = status.split(",")[0].trim();
-            String category = Dictionary.SECONDARY_STATUSES.get(firstStatus);
+            String category = SECONDARY_STATUSES.get(firstStatus);
             if (category != null) {
                 relationActives.stream()
                         .filter(active -> active.getIin().equals(rr.getIin_2()))
@@ -96,7 +112,6 @@ public class RelationService {
 
         return getRelationActiveWithTypes(typeToRelation);
     }
-
     private RelationActiveWithTypes getRelationActiveWithTypes(Map<String, List<RelationActive>> typeToRelation) {
         typeToRelation.forEach((key, list) ->
                 list.sort(Comparator.comparing(ra -> {

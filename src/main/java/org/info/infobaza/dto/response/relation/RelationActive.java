@@ -2,7 +2,6 @@ package org.info.infobaza.dto.response.relation;
 
 import lombok.Builder;
 import lombok.Getter;
-import org.info.infobaza.dto.response.job.Head;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 
 import java.util.List;

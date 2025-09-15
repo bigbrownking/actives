@@ -23,29 +23,11 @@ public class FNO240Service implements InformationalService {
     private final SQLFileUtil sqlFileUtil;
     private final Mapper mapper;
 
-
-
-    @ServiceMetadata(
-            type = {"Наличие"},
-            source = {"FNO240"},
-            vids = {"Прочие активы"},
-            isActive = true
-    )
-    public List<InformationRecordDt> getFNO240Other2(String iin, String dateFrom, String dateTo) throws IOException {
-        if (iin == null || iin.trim().isEmpty()) {
-            throw new IllegalArgumentException("IIN cannot be null or empty");
-        }
-        log.info("Fetching FNO240 money for IIN: {}", iin);
-        String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.FNO240_Прочие_активы.getPath(), iin, dateFrom, dateTo);
-        return jdbcTemplate.query(sql, mapper::mapRowToInformation);
-    }
-
     @ServiceMetadata(
             source = {"FNO240"},
             vids = {"Прибыль КИК"},
             isIncome = true
     )
-
     public List<InformationRecordDt> getFNO240IncomeKik(String iin, String dateFrom, String dateTo) throws IOException {
         if (iin == null || iin.trim().isEmpty()) {
             throw new IllegalArgumentException("IIN cannot be null or empty");

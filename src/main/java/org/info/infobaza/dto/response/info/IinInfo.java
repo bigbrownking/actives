@@ -8,7 +8,7 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 public class IinInfo {
-    private final String type;
-    private final String name;
-    private final String iin;
+    private String type;
+    private String name;
+    private String iin;
 }

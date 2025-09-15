@@ -36,9 +36,7 @@ public enum QueryLocationDictionary {
     FNO270_в_т_ч_Доход_лица_занимающиеся_частной_практикой("sql/FNO270/в_т_ч_Доход_лица_занимающиеся_частной_практикой.sql"),
     FNO270_в_т_ч_Имущественный_доход("sql/FNO270/в_т_ч_Имущественный_доход.sql"),
     FNO270_Доход_по_данным_ФНО("sql/FNO270/Доход_по_данным_ФНО.sql"),
-    FNO270_Прочие_активы("sql/FNO270/Прочие_активы.sql"),
     FNO240_Прибыль_КИК("sql/FNO240/Прибыль_КИК.sql"),
-    FNO240_Прочие_активы("sql/FNO240/Прочие_активы.sql"),
     FNO240_Иные_имущества("sql/FNO240/Иные_имущества.sql"),
     FNO250_Иные_имущества("sql/FNO250/Иные_имущества.sql"),
     FNO250_Прочие_активы("sql/FNO250/Прочие_активы.sql"),
@@ -61,7 +59,21 @@ public enum QueryLocationDictionary {
     ЕИАС_Ценные_бумаги("sql/ЕИАС/Ценные_бумаги.sql"),
     ЕИАС_Цифровые_активы("sql/ЕИАС/Цифровые_активы.sql"),
     Money_money("sql/Money/money.sql"),
-    Административные_штрафы("sql/Административные штрафы/административные_штрафы.sql");
+    Административные_штрафы("sql/Административные штрафы/административные_штрафы.sql"),
+    Pension_pension("sql/Pension/pension.sql"),
+    Bank_bank("sql/Bank/bank.sql"),
+    ActiveOverall_active_overall("sql/ActiveOverall/active_overall.sql"),
+    UL_zt("sql/UL/zt.sql"),
+    UL_zt_all("sql/UL/zt_all.sql"),
+    Nominal_fiz("sql/Nominal/fiz.sql"),
+    Nominal_ul("sql/Nominal/ul.sql"),
+    Industry_industry("sql/Industry/industry.sql"),
+    Status_status("sql/Status/status.sql"),
+    ESF_Overall_esf_overall("sql/ESF_Overall/esf_overall.sql"),
+    Supervisor_ruk("sql/Supervisor/ruk.sql"),
+    Supervisor_uchr("sql/Supervisor/uchr.sql"),
+    Supervisor_hist_ruk("sql/Supervisor/hist_ruk.sql"),
+    Supervisor_hist_uchr("sql/Supervisor/hist_uchr.sql");
 
     private final String path;
 

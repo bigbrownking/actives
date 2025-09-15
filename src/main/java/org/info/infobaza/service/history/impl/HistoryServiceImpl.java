@@ -1,6 +1,7 @@
 package org.info.infobaza.service.history.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.dto.request.HistoryRequest;
 import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.request.RelativesIncomeRequest;
@@ -22,6 +23,7 @@ import static org.info.infobaza.util.convert.JpaPageable.createPageableSorted;
 import static org.info.infobaza.util.user.UserUtil.*;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class HistoryServiceImpl implements HistoryService {
     private final RequestRepository requestRepository;
@@ -43,6 +45,7 @@ public class HistoryServiceImpl implements HistoryService {
     @Override
     @Transactional
     public Request createRequest(RequestDto request) {
+        log.info("Inserting new request into db...");
         return requestRepository.save(Request.builder()
                 .user(getCurrentUser())
                 .iinBin(request.getIin())

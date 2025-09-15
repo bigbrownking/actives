@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.constants.Dictionary;
 import org.info.infobaza.constants.QueryLocationDictionary;
+import org.info.infobaza.dto.response.info.ActiveCountGroup;
 import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.dto.response.info.RecordGroup;
 import org.info.infobaza.dto.response.info.active.*;
@@ -20,7 +21,7 @@ import org.info.infobaza.model.info.active_income.RecordDt;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.model.info.person.RelationRecord;
 import org.info.infobaza.service.enpf.HeadService;
-import org.info.infobaza.service.history.HistoryService;
+import org.info.infobaza.service.nao_con.NaoConService;
 import org.info.infobaza.service.portret.PortretService;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.util.convert.NumberConverter;
@@ -30,13 +31,20 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.info.infobaza.constants.Dictionary.TYPE_PREFIXES;
 
 @Component
 @Slf4j
@@ -48,6 +56,7 @@ public class Analyzer {
     private final Mapper mapper;
     private final SQLFileUtil sqlFileUtil;
     private final NumberConverter numberConverter;
+    private final NaoConService naoConService;
 
     @Autowired
     public void setHeadService(@Lazy HeadService headService){
@@ -104,12 +113,18 @@ public class Analyzer {
 
     public List<RelationActive> toRelationActives(List<RelationRecord> relationRecords, String dateFrom, String dateTo) {
         return relationRecords.parallelStream()
-                .map(rr -> toRelationActive(rr, dateFrom, dateTo))
+                .map(rr -> {
+                    try {
+                        return toRelationActive(rr, dateFrom, dateTo);
+                    } catch (IOException e) {
+                        return null;
+                    }
+                }).filter(Objects::nonNull)
                 .filter(rr -> !rr.getActives().equals("0"))
                 .collect(Collectors.toList());
     }
 
-    private RelationActive toRelationActive(RelationRecord relationRecord, String dateFrom, String dateTo) {
+    private RelationActive toRelationActive(RelationRecord relationRecord, String dateFrom, String dateTo) throws IOException {
         if (relationRecord == null) return null;
 
         String iin = relationRecord.getIin_2();
@@ -143,12 +158,8 @@ public class Analyzer {
 
     private void fetchOverallActive(String iin, String dateFrom, String dateTo, List<ActiveOverall> allInfoRecords) {
         try {
-            String sql = "SELECT * FROM pfr_dashboard.active_overall_05_2025_2 WHERE iin_bin = ? AND date BETWEEN ? AND ?";
-            allInfoRecords.addAll(jdbcTemplate.query(sql, ps -> {
-                ps.setString(1, iin);
-                ps.setString(2, dateFrom);
-                ps.setString(3, dateTo);
-            }, mapper::mapRowToActivesOverall));
+            String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.ActiveOverall_active_overall.getPath(), iin, dateFrom, dateTo);
+            allInfoRecords.addAll(jdbcTemplate.query(sql, mapper::mapRowToActivesOverall));
         } catch (Exception e) {
             log.error("Unexpected error fetching actives for IIN: {}", iin, e);
         }
@@ -362,7 +373,11 @@ public class Analyzer {
 
         Map<String, String> iinToFio = new HashMap<>(uniqueIins.size());
         uniqueIins.forEach(iin -> {
-            IinInfo iinInfo = portretService.getIinInfo(iin);
+            IinInfo iinInfo = null;
+            try {
+                iinInfo = portretService.getIinInfo(iin);
+            } catch (IOException e) {
+            }
             iinToFio.put(iin, iinInfo != null ? iinInfo.getName() : "Unknown");
         });
         return iinToFio;
@@ -627,7 +642,11 @@ public class Analyzer {
 
         Map<String, String> iinToFio = new HashMap<>(uniqueIins.size());
         uniqueIins.forEach(iin -> {
-            IinInfo iinInfo = portretService.getIinInfo(iin);
+            IinInfo iinInfo = null;
+            try {
+                iinInfo = portretService.getIinInfo(iin);
+            } catch (IOException e) {
+            }
             iinToFio.put(iin, iinInfo != null ? iinInfo.getName() : "Unknown");
         });
         return iinToFio;
@@ -693,153 +712,40 @@ public class Analyzer {
                                 .collect(Collectors.toList())
                 ));
     }
-    private String extractTypeFromDopinfo(String aktivy, String dopinfo) {
-        if (dopinfo == null || dopinfo.isEmpty()) {
+    public String extractTypeFromDopinfo(String aktivy, String dopinfo) {
+        if (dopinfo == null || dopinfo.isEmpty() || aktivy == null) {
             return null;
         }
-        String type = null;
-        if ("Недвижимое имущество".equals(aktivy)) {
-            int startIndex = dopinfo.indexOf("Вид недвижимости:");
-            if (startIndex != -1) {
-                startIndex += "Вид недвижимости:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                if (endIndex != -1) {
-                    type = dopinfo.substring(startIndex, endIndex).trim();
-                } else {
-                    type = dopinfo.substring(startIndex).trim();
-                }
-            }else{
-                startIndex = dopinfo.indexOf("Описание:");
-                if (startIndex != -1) {
-                    startIndex += "Описание:".length();
-                    int endIndex = dopinfo.indexOf(";", startIndex);
-                    type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
-                }
-            }
-        } else if ("Транспортные средства".equals(aktivy) || "ГКБ-Транспортные средства".equals(aktivy)) {
-            int startIndex = dopinfo.indexOf("Авто:");
-            if (startIndex != -1) {
-                startIndex += "Авто:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
-            } else {
-                startIndex = dopinfo.indexOf("Описание:");
-                if (startIndex != -1) {
-                    startIndex += "Описание:".length();
-                    int endIndex = dopinfo.indexOf(";", startIndex);
-                    type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
-                }
-            }
-        }else if("Административный штраф".equals(aktivy)){
-            int startIndex = dopinfo.indexOf("Был совершен штраф:");
-            if (startIndex != -1) {
-                startIndex += "Был совершен штраф:".length();
-                int endIndex = dopinfo.length();
-                type = dopinfo.substring(startIndex, endIndex).trim();
-            }
-        }else if("Животные".equals(aktivy) || "Предметы исскуства".equals(aktivy)){
-            int startIndex = dopinfo.indexOf("Описание:");
-            if (startIndex != -1) {
-                startIndex += "Описание:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                if (endIndex != -1) {
-                    type = dopinfo.substring(startIndex, endIndex).trim();
-                } else {
-                    type = dopinfo.substring(startIndex).trim();
-                }
-            }
-        }else if("Прочие активы".equals(aktivy)){
-            int startIndex = dopinfo.indexOf("Описание:");
-            if (startIndex != -1) {
-                startIndex += "Описание:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                if (endIndex != -1) {
-                    type = dopinfo.substring(startIndex, endIndex).trim();
-                } else {
-                    type = dopinfo.substring(startIndex).trim();
-                }
-            } else {
-                startIndex = dopinfo.indexOf("Наименование и коды стран:");
-                if (startIndex != -1) {
-                    startIndex += "Наименование и коды стран:".length();
-                    int endIndex = dopinfo.indexOf(";", startIndex);
-                    type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
-                }
+
+        String[] prefixes = TYPE_PREFIXES.get(aktivy);
+        if (prefixes == null) {
+            return null;
+        }
+
+        for (String prefix : prefixes) {
+            Optional<String> result = extractType(dopinfo, prefix);
+            if (result.isPresent()) {
+                return result.get();
             }
         }
-        else if ("ЖД составы".equals(aktivy)) {
-            int startIndex = dopinfo.indexOf("Тип жд состава:");
-            if (startIndex != -1) {
-                startIndex += "Тип жд состава:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                if (endIndex != -1) {
-                    type = dopinfo.substring(startIndex, endIndex).trim();
-                } else {
-                    type = dopinfo.substring(startIndex).trim();
-                }
-            }
-        }else if("Ценные бумаги".equals(aktivy)){
-            int startIndex = dopinfo.indexOf("Намиенование акции:");
-            if (startIndex != -1) {
-                startIndex += "Намиенование акции:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                if (endIndex != -1) {
-                    type = dopinfo.substring(startIndex, endIndex).trim();
-                } else {
-                    type = dopinfo.substring(startIndex).trim();
-                }
-            }
-        }else if("Спецтехника".equals(aktivy)){
-            int startIndex = dopinfo.indexOf("Вид:");
-            if (startIndex != -1) {
-                startIndex += "Вид:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
-            }
-        }else if("Воздушные судна".equals(aktivy)){
-            int startIndex = dopinfo.indexOf("Тип ВС:");
-            if (startIndex != -1) {
-                startIndex += "Тип ВС:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                type = (endIndex != -1) ? dopinfo.substring(startIndex, endIndex).trim() : dopinfo.substring(startIndex).trim();
-            }
-        }else if("ЮЛ".equals(aktivy)){
-            int startIndex = dopinfo.indexOf("Намиенование ЮЛ:");
-            if (startIndex != -1) {
-                startIndex += "Намиенование ЮЛ:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                if (endIndex != -1) {
-                    type = dopinfo.substring(startIndex, endIndex).trim();
-                } else {
-                    type = dopinfo.substring(startIndex).trim();
-                }
-            }
-        }else if("Водный транспорт".equals(aktivy)){
-            int startIndex = dopinfo.indexOf("Тип судна:");
-            if (startIndex != -1) {
-                startIndex += "Тип судна:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                if (endIndex != -1) {
-                    type = dopinfo.substring(startIndex, endIndex).trim();
-                } else {
-                    type = dopinfo.substring(startIndex).trim();
-                }
-            }
-        }else if("Иные имущества".equals(aktivy)){
-            int startIndex = dopinfo.indexOf("Наименование и коды стран:");
-            if (startIndex != -1) {
-                startIndex += "Наименование и коды стран:".length();
-                int endIndex = dopinfo.indexOf(";", startIndex);
-                if (endIndex != -1) {
-                    type = dopinfo.substring(startIndex, endIndex).trim();
-                } else {
-                    type = dopinfo.substring(startIndex).trim();
-                }
-            }
-        }
-        return type;
+
+        return null;
     }
 
+    private Optional<String> extractType(String dopinfo, String prefix) {
+        int startIndex = dopinfo.indexOf(prefix);
+        if (startIndex == -1) {
+            return Optional.empty();
+        }
+
+        startIndex += prefix.length();
+        int endIndex = dopinfo.indexOf(";", startIndex);
+        String type = (endIndex != -1)
+                ? dopinfo.substring(startIndex, endIndex).trim()
+                : dopinfo.substring(startIndex).trim();
+
+        return type.isEmpty() ? Optional.empty() : Optional.of(type);
+    }
     public double calculateTotalIncomeByIIN(String iin, String dateFrom, String dateTo) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
         Set<String> targetSources = Dictionary.getIncomeMethodsBySource().keySet();
@@ -942,7 +848,7 @@ public class Analyzer {
     public ActiveResponse getAllActiveCountsOfPersonsByDates(String iin, String dateFrom, String dateTo,
                                                         List<String> years, List<String> vids,
                                                         List<String> types, List<String> sources,
-                                                        List<String> iins) {
+                                                        List<String> iins, String button) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
         List<ESFInformationRecordDt> allEsfRecords = new ArrayList<>();
         Map<String, List<String>> filteredIinToRelation = populateIinToRelation(iin, iins);
@@ -954,9 +860,61 @@ public class Analyzer {
         Set<String> targetSources = sources != null && !sources.isEmpty()
                 ? new HashSet<>(sources)
                 : Dictionary.getActiveMethodsBySource().keySet();
+        switch (button) {
+            case "Все" -> processRecords(involvedIins, dateFrom, dateTo, years, targetSources, vids, types,
+                    allInfoRecords, allEsfRecords, true);
+            case "Текущий" -> {
+                for (String currentIin : involvedIins) {
+                    try {
+                        List<ESFInformationRecordDt> naoConRecords = naoConService.getNaoConHouse(currentIin, dateFrom, dateTo);
+                        synchronized (allEsfRecords) {
+                            allEsfRecords.addAll(naoConRecords);
+                        }
 
-        processRecords(involvedIins, dateFrom, dateTo, years, targetSources, vids, types,
-                allInfoRecords, allEsfRecords, true);
+                        Set<String> kdsWithSale = new HashSet<>();
+                        Map<String, ESFInformationRecordDt> latestRecordsByKd = new HashMap<>();
+                        for (ESFInformationRecordDt record : naoConRecords) {
+                            String kd = extractKdFromDopinfo(record.getDopinfo());
+                            if (kd != null) {
+                                if ("Реализация".equals(record.getOper())) {
+                                    kdsWithSale.add(kd);
+                                }
+                                latestRecordsByKd.compute(kd, (key, oldRecord) ->
+                                        oldRecord == null || isLaterDate(record.getDate().toString(),
+                                                oldRecord.getDate().toString()) ? record : oldRecord);
+                            }
+                        }
+
+                        List<ESFInformationRecordDt> filteredRecords = latestRecordsByKd.values().stream()
+                                .filter(record -> {
+                                    String kd = extractKdFromDopinfo(record.getDopinfo());
+                                    return kd != null && !kdsWithSale.contains(kd) && "Приобретение".equals(record.getOper());
+                                })
+                                .toList();
+
+                        synchronized (allEsfRecords) {
+                            allEsfRecords.clear();
+                            allEsfRecords.addAll(filteredRecords);
+                        }
+
+                    } catch (IOException e) {
+                        log.error("Failed to fetch NAO CON records for IIN {}: {}", currentIin, e.getMessage());
+                    }
+                }
+            }
+            case "Исторический" -> {
+                for (String currentIin : involvedIins) {
+                    try {
+                        List<ESFInformationRecordDt> naoConRecords = naoConService.getNaoConHouse(currentIin, dateFrom, dateTo);
+                        synchronized (allEsfRecords) {
+                            allEsfRecords.addAll(naoConRecords);
+                        }
+                    } catch (IOException e) {
+                        log.error("Failed to fetch NAO CON records for IIN {}: {}", currentIin, e.getMessage());
+                    }
+                }
+            }
+        }
 
         ActiveResponse activeResult = toActiveCount(keepDistinctInfo(allInfoRecords),
                 keepDistinctEsf(allEsfRecords),
@@ -964,7 +922,29 @@ public class Analyzer {
         setIinToRelation(activeResult, filteredIinToRelation);
         return activeResult;
     }
+    private boolean isLaterDate(String date1, String date2) {
+        if (date1 == null || date2 == null) return date1 != null;
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            sdf.setLenient(false);
+            return sdf.parse(date1).after(sdf.parse(date2));
+        } catch (ParseException e) {
+            log.warn("Failed to parse dates {} or {}: {}", date1, date2, e.getMessage());
+            return false;
+        }
+    }
+    private String extractKdFromDopinfo(String dopinfo) {
+        if (dopinfo == null || dopinfo.isEmpty()) {
+            return null;
+        }
 
+        Pattern pattern = Pattern.compile("kd:([^;]+)");
+        Matcher matcher = pattern.matcher(dopinfo);
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+        return null;
+    }
     public ActiveResponse toActiveCount(List<InformationRecordDt> informationRecords,
                                         List<ESFInformationRecordDt> esfInformationRecords,
                                         String dateFrom, String dateTo, List<String> years, List<String> iins) {
@@ -978,10 +958,15 @@ public class Analyzer {
                 .filter(record -> isSummaryMode || years.contains(String.valueOf(record.getDate().getYear())))
                 .sorted(Comparator.comparing(RecordDt::getDate, Comparator.nullsLast(Comparator.naturalOrder())))
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
 
         log.info("ALL RECORDS SIZE: {}", allRecords.size());
-        List<RecordDt> deduplicatedRecords = deduplicateRecords(allRecords);
+
+        List<RecordDt> formattedRecords = allRecords.stream()
+                .peek(record -> record.setSumm(numberConverter.formatNumber(record.getSumm())))
+                .toList();
+
+        List<RecordDt> deduplicatedRecords = deduplicateRecords(formattedRecords);
         if (deduplicatedRecords.isEmpty()) {
             log.warn("No records provided for date range {} to {}, years: {}", dateFrom, dateTo, years);
             return ActiveCounts.builder()

@@ -1,4 +1,4 @@
-package org.info.infobaza.dto.response.info.active;
+package org.info.infobaza.dto.response.info;
 
 import lombok.Builder;
 import lombok.Getter;

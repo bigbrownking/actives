@@ -8,7 +8,6 @@ import com.lowagie.text.pdf.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.dto.request.ExportRequest;
-import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
 import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
 import org.info.infobaza.dto.response.job.Head;

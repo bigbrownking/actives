@@ -2,11 +2,9 @@ package org.info.infobaza.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.info.infobaza.dto.request.MainRequest;
-import org.info.infobaza.dto.response.job.Head;
-import org.info.infobaza.dto.response.job.Industry;
-import org.info.infobaza.dto.response.job.Pension;
-import org.info.infobaza.dto.response.job.Turnover;
+import org.info.infobaza.dto.response.job.*;
 import org.info.infobaza.exception.NotFoundException;
+import org.info.infobaza.model.info.job.TurnoverRecord;
 import org.info.infobaza.service.enpf.ENPFService;
 import org.info.infobaza.service.enpf.HeadService;
 import org.info.infobaza.service.enpf.IndustrialService;
@@ -41,7 +39,7 @@ public class JobController {
 
     @LogRequest
     @PostMapping("/head")
-    public ResponseEntity<Head> getHead(@RequestBody MainRequest mainRequest) {
+    public ResponseEntity<Head> getHead(@RequestBody MainRequest mainRequest) throws IOException {
         return ResponseEntity.ok(headService.constructHead(
                 mainRequest.getIin_bin(),
                 mainRequest.getDateFrom().toString(),
@@ -51,18 +49,16 @@ public class JobController {
 
     @LogRequest
     @PostMapping("/industrial")
-    public ResponseEntity<Industry> getIndustrial(@RequestBody MainRequest mainRequest) throws NotFoundException {
+    public ResponseEntity<Industry> getIndustrial(@RequestBody MainRequest mainRequest) throws IOException {
         return ResponseEntity.ok(industrialService.getIndustry(
                 mainRequest.getIin_bin()));
     }
 
     @LogRequest
     @PostMapping("/turnover")
-    public ResponseEntity<List<Turnover>> getTurnover(@RequestBody MainRequest mainRequest) throws IOException {
+    public ResponseEntity<List<BankTurnoverGroup>> getTurnover(@RequestBody MainRequest mainRequest) throws IOException {
         return ResponseEntity.ok(enpfService.getTurnover(
-                mainRequest.getIin_bin(),
-                mainRequest.getDateFrom().toString(),
-                mainRequest.getDateTo().toString()
+                mainRequest.getIin_bin()
         ));
     }
 }

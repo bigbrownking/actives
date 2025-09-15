@@ -23,7 +23,8 @@ public final class Dictionary {
 
     private final ApplicationContext applicationContext;
     private ServiceSources serviceSources;
-    public static final Map<String, String> SECONDARY_STATUSES = Map.of("Отправил ДС", "ДС",
+    public static final Map<String, String> SECONDARY_STATUSES = Map.of(
+            "Отправил ДС", "ДС",
             "Получил ДС", "ДС",
             "Вместе летали 3 и более раз", "Самолёт",
             "Вместе работали в 3 и более ЮЛ", "Работа",
@@ -31,7 +32,24 @@ public final class Dictionary {
             "Совместные автостраховки", "Совместная страховка",
             "Вместе жили в 2 и более адресах", "Вместе жили и коммунальные платежи",
             "Коммунальные платежи", "Вместе жили и коммунальные платежи",
-            "Доверенность", "Доверенность"
+            "Доверитель", "Доверенность",
+            "Поверенный", "Доверенность"
+    );
+    public static final Map<String, String[]> TYPE_PREFIXES = Map.ofEntries(
+            Map.entry("Недвижимое имущество", new String[]{"Вид недвижимости:", "Описание:"}),
+            Map.entry("Транспортные средства", new String[]{"Авто:", "Описание:"}),
+            Map.entry("ГКБ-Транспортные средства", new String[]{"Авто:", "Описание:"}),
+            Map.entry("Административный штраф", new String[]{"Был совершен штраф:"}),
+            Map.entry("Животные", new String[]{"Описание:"}),
+            Map.entry("Предметы исскуства", new String[]{"Описание:"}),
+            Map.entry("Прочие активы", new String[]{"Описание:", "Наименование и коды стран:"}),
+            Map.entry("ЖД составы", new String[]{"Тип жд состава:"}),
+            Map.entry("Ценные бумаги", new String[]{"Намиенование акции:"}),
+            Map.entry("Спецтехника", new String[]{"Вид:"}),
+            Map.entry("Воздушные судна", new String[]{"Тип ВС:"}),
+            Map.entry("ЮЛ", new String[]{"Намиенование ЮЛ:"}),
+            Map.entry("Водный транспорт", new String[]{"Тип судна:"}),
+            Map.entry("Иные имущества", new String[]{"Наименование и коды стран:"})
     );
     public static void generate_pdf_header(ExportRequest request,
                                            HttpServletResponse response){

@@ -9,10 +9,9 @@ import java.time.LocalDateTime;
 @Data
 @AllArgsConstructor
 public class TurnoverRecord {
-    private int amount;
-    private LocalDateTime date;
-    private String iin;
-    private String bank;
-    private String account;
-    private String dopinfo;
+    private String iinBin;
+    private String bankName;
+    private String bankAccount;
+    private String summ;
+
 }

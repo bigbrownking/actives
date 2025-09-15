@@ -2,17 +2,16 @@ package org.info.infobaza.service.enpf;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.dto.response.job.Head;
-import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.model.info.active_income.EsfOverall;
 import org.info.infobaza.model.info.job.CompanyRecord;
+import org.info.infobaza.model.info.job.HistorySupervisorRecord;
 import org.info.infobaza.model.info.job.StatusRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.service.Analyzer;
-import org.info.infobaza.service.portret.PortretService;
 import org.info.infobaza.util.convert.Mapper;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
+import org.info.infobaza.util.convert.SQLFileUtil;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -27,10 +26,10 @@ import java.util.stream.Collectors;
 public class HeadService {
     private final JdbcTemplate jdbcTemplate;
     private final Mapper mapper;
+    private final SQLFileUtil sqlFileUtil;
     private final Analyzer analyzer;
-    private final PortretService portretService;
 
-    public Head constructHead(String iin, String dateFrom, String dateTo) {
+    public Head constructHead(String iin, String dateFrom, String dateTo) throws IOException {
         List<SupervisorRecord> supervisorRecords = getType(iin);
         List<CompanyRecord> companyRecords = new ArrayList<>();
         for (SupervisorRecord supervisorRecord : supervisorRecords) {
@@ -50,29 +49,46 @@ public class HeadService {
                 .build();
     }
 
-    public List<SupervisorRecord> getType(String iin) {
-        String sqlSup = "SELECT * FROM pfr_dashboard.rucovoditeli WHERE employee_iin_bin = ?";
+    public List<SupervisorRecord> getType(String iin) throws IOException {
+        String sqlSup = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_ruk.getPath(), iin);
         List<SupervisorRecord> supervisorRecordSup = new ArrayList<>();
         List<SupervisorRecord> supervisorRecordFou = new ArrayList<>();
+        List<HistorySupervisorRecord> historySupervisorRecordSup = new ArrayList<>();
+        List<HistorySupervisorRecord> historySupervisorRecordFou = new ArrayList<>();
         try {
-            supervisorRecordSup = jdbcTemplate.query(
-                    sqlSup,
-                    new Object[]{iin},
-                    mapper::mapRowToSupervisor);
+            supervisorRecordSup = jdbcTemplate.query(sqlSup, mapper::mapRowToSupervisor);
             log.info("supervisor: {}", supervisorRecordSup);
         } catch (EmptyResultDataAccessException e) {
             log.warn("No руководитель found for IIN: {}", iin);
         }
-        String sqlFou = "SELECT * FROM pfr_dashboard.uchrediteli WHERE founder_iin_bin = ?";
+        String sqlFou = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_uchr.getPath(), iin);
         try {
-            supervisorRecordFou = jdbcTemplate.query(
-                    sqlFou,
-                    new Object[]{iin},
-                    mapper::mapRowToFounder);
+            supervisorRecordFou = jdbcTemplate.query(sqlFou, mapper::mapRowToFounder);
             log.info("founder: {}", supervisorRecordFou);
         } catch (EmptyResultDataAccessException e) {
             log.warn("No учредитель found for IIN: {}", iin);
         }
+
+        String sqlHistSup = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_hist_ruk.getPath(), iin);
+        try {
+            historySupervisorRecordSup = jdbcTemplate.query(sqlHistSup, mapper::mapRowToHistorySupervisor);
+            log.info("history supervisor: {}", historySupervisorRecordSup);
+        } catch (EmptyResultDataAccessException e) {
+            log.warn("No руководитель found for IIN: {}", iin);
+        }
+
+
+        String sqlHistFou = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_hist_uchr.getPath(), iin);
+        try {
+            historySupervisorRecordFou = jdbcTemplate.query(sqlHistFou, mapper::mapRowToHistorySupervisor);
+            log.info("history founder: {}", historySupervisorRecordFou);
+        } catch (EmptyResultDataAccessException e) {
+            log.warn("No учредитель found for IIN: {}", iin);
+        }
+
+        makeHistory(supervisorRecordSup, historySupervisorRecordSup);
+        makeHistory(supervisorRecordFou, historySupervisorRecordFou);
+
         if (supervisorRecordSup.isEmpty() && supervisorRecordFou.isEmpty()) {
             return new ArrayList<>();
         }
@@ -89,14 +105,31 @@ public class HeadService {
         return new ArrayList<>();
     }
 
-    private List<CompanyRecord> getCompanyInfo(String iin) {
+    private List<SupervisorRecord> makeHistory(List<SupervisorRecord> supervisorRecords, List<HistorySupervisorRecord> historySupervisorRecords){
+        List<String> historicalIinBins = historySupervisorRecords.stream()
+                .map(HistorySupervisorRecord::getIinBin)
+                .toList();
+
+        supervisorRecords.forEach(record -> {
+            if (historicalIinBins.contains(record.getIin_bin())) {
+                String currentPositionType = record.getPositionType();
+                if (currentPositionType != null && !currentPositionType.startsWith("Исторический ")) {
+                    record.setPositionType("Исторический " + currentPositionType);
+                }
+            }
+        });
+
+        return supervisorRecords;
+    }
+
+    private List<CompanyRecord> getCompanyInfo(String iin) throws IOException {
         if (iin == null || iin.trim().isEmpty()) {
             log.warn("IIN is null or empty, cannot fetch company info");
             return null;
         }
-        String sql = "SELECT * FROM gdb_ul0205.ztFaces WHERE `BIN subekta` = ?";
+        String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.UL_zt_all.getPath(), iin);
         try {
-            List<CompanyRecord> companyRecords = jdbcTemplate.query(sql, new Object[]{iin}, mapper::mapRowToCompany);
+            List<CompanyRecord> companyRecords = jdbcTemplate.query(sql, mapper::mapRowToCompany);
             if (companyRecords == null || companyRecords.isEmpty()) {
                 log.warn("No company found for IIN: {}", iin);
                 return null;
@@ -128,19 +161,15 @@ public class HeadService {
         return analyzer.calculateTotalIncomeByIIN(iin, dateFrom, dateTo);
     }
 
-    private List<EsfOverall> getESFInfo(String iin, String dateFrom, String dateTo) {
-        String sql = "select * from pfr_dashboard.esf_work_overall where iin_bin = ? AND date BETWEEN ? AND ?";
-        return jdbcTemplate.query(
-                sql, new Object[]{iin, dateFrom, dateTo}, mapper::mapRowToESFOverall
-        );
+    private List<EsfOverall> getESFInfo(String iin, String dateFrom, String dateTo) throws IOException {
+        String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.ESF_Overall_esf_overall.getPath(),
+                iin, dateFrom, dateTo);
+        return jdbcTemplate.query(sql, mapper::mapRowToESFOverall);
     }
 
-    private List<String> getStatuses(String iin) {
-        String sql = "select * from pfr_dashboard.priznak_neblagodeznyh where iin_bin = ?";
-
-        List<StatusRecord> statusRecords = jdbcTemplate.query(
-                sql, new Object[]{iin}, mapper::mapRowToStatus
-        );
+    private List<String> getStatuses(String iin) throws IOException {
+        String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Status_status.getPath(), iin);
+        List<StatusRecord> statusRecords = jdbcTemplate.query(sql, mapper::mapRowToStatus);
 
         return statusRecords.stream().map(StatusRecord::getStatus).toList();
     }

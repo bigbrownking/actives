@@ -1,6 +1,7 @@
 package org.info.infobaza.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.info.infobaza.constants.Button;
 import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.request.RelativesIncomeRequest;
 import org.info.infobaza.dto.request.YearlyCountRequest;
@@ -15,7 +16,6 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -48,8 +48,9 @@ public class InformationController {
 
     @LogRequest
     @PostMapping("/activeCounts")
-    @Cacheable(value = "activeCounts", key = "#request")
-    public ResponseEntity<ActiveResponse> getAllActiveCountsOfPerson(@RequestBody RelativesActiveRequest request) {
+    @Cacheable(value = "activeCounts", key = "{'request': #request, 'button': #button}")
+    public ResponseEntity<ActiveResponse> getAllActiveCountsOfPerson(@RequestBody RelativesActiveRequest request,
+                                                                     @RequestParam(value = "button", required = false) String button) {
         ActiveResponse activeResponse = analyzer.getAllActiveCountsOfPersonsByDates(
                 request.getIin(),
                 request.getDateFrom().toString(),
@@ -58,7 +59,8 @@ public class InformationController {
                 request.getVids(),
                 request.getTypes(),
                 request.getSources(),
-                request.getIins()
+                request.getIins(),
+                button
         );
 
         // historyService.createRequest(request);

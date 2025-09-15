@@ -3,9 +3,8 @@ package org.info.infobaza.dto.response.info.active;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
-import org.info.infobaza.model.info.active_income.RecordDt;
+import org.info.infobaza.dto.response.info.ActiveCountGroup;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 

@@ -1,9 +1,7 @@
 package org.info.infobaza.service.export.impl;
 
-import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.*;
 import org.info.infobaza.dto.request.ExportRequest;
-import org.info.infobaza.dto.request.RelativesActiveRequest;
 import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
 import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
 import org.info.infobaza.dto.response.job.Head;
@@ -52,8 +50,7 @@ public class WordExportServiceImpl implements WordExportService {
 
     @Override
     public void exportToWord(OutputStream outputStream, ExportRequest request) throws IOException, NotFoundException {
-        XWPFDocument document = new XWPFDocument();
-        try {
+        try (XWPFDocument document = new XWPFDocument()) {
             String dateFrom = request.getDateFrom().toString();
             String dateTo = request.getDateTo().toString();
             String iin = request.getIin();
@@ -107,11 +104,6 @@ public class WordExportServiceImpl implements WordExportService {
 
             // Write to output stream
             document.write(outputStream);
-        } catch (NotFoundException e) {
-            log.error("Data not found: ", e);
-            throw e;
-        } finally {
-            document.close();
         }
     }
 

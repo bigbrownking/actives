@@ -2,6 +2,7 @@ package org.info.infobaza.service.enpf;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.info.infobaza.dto.response.job.BankTurnoverGroup;
 import org.info.infobaza.dto.response.job.Pension;
 import org.info.infobaza.dto.response.job.Turnover;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
@@ -10,12 +11,14 @@ import org.info.infobaza.service.InformationalService;
 import org.info.infobaza.service.ServiceMetadata;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.constants.QueryLocationDictionary;
+import org.info.infobaza.util.convert.NumberConverter;
 import org.info.infobaza.util.convert.SQLFileUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -24,6 +27,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ENPFService implements InformationalService {
 
+    private final NumberConverter numberConverter;
     private final JdbcTemplate jdbcTemplate;
     private final SQLFileUtil sqlFileUtil;
     private final Mapper mapper;
@@ -52,14 +56,12 @@ public class ENPFService implements InformationalService {
         }
 
         List<Pension> pensions = new ArrayList<>();
-        String sql = "SELECT * FROM pfr_dashboard.imp_pension_fl_contr WHERE IIN = ? AND KNP = '010' AND PAY_DATE BETWEEN ? AND ? ORDER BY PAY_DATE DESC";
         List<InformationRecordDt> informationRecords;
+        DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("dd-M-yyyy");
+
+        String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.Pension_pension.getPath(), iin, dateFrom, dateTo);
         try {
-            informationRecords = jdbcTemplate.query(
-                    sql,
-                    new Object[]{iin, dateFrom, dateTo},
-                    mapper::mapRowToPension
-            );
+            informationRecords = jdbcTemplate.query(sql, mapper::mapRowToPension);
         } catch (Exception e) {
             log.error("Error fetching pension records for IIN: {}, dateFrom: {}, dateTo: {}", iin, dateFrom, dateTo, e);
             throw new IOException("Failed to fetch pension records", e);
@@ -115,72 +117,48 @@ public class ENPFService implements InformationalService {
                 periodEndDate = LocalDate.parse(dateTo);
             }
 
+            String formattedStartDate = periodStartDate.format(outputFormatter);
+            String formattedEndDate = periodEndDate.format(outputFormatter);
+
             Pension pension = new Pension(
-                    periodStartDate.toString(),
-                    periodEndDate.toString(),
+                    formattedStartDate,
+                    formattedEndDate,
                     entry.getValue().get(0).getDopinfo(),
                     entry.getKey()
-
             );
             pensions.add(pension);
         }
 
-        pensions.sort(Comparator.comparing(p -> LocalDate.parse(p.getDateFrom())));
+        pensions.sort(Comparator.comparing(p -> LocalDate.parse(p.getDateFrom(), outputFormatter)));
         return pensions;
     }
 
-    public List<Turnover> getTurnover(String iin, String dateFrom, String dateTo) throws IOException {
+    public List<BankTurnoverGroup> getTurnover(String iin) throws IOException {
         if (iin == null || iin.trim().isEmpty()) {
             throw new IllegalArgumentException("IIN cannot be null or empty");
         }
-        if (dateFrom == null || dateTo == null) {
-            throw new IllegalArgumentException("dateFrom and dateTo cannot be null");
-        }
 
         List<TurnoverRecord> turnoverRecords;
-        String sql = "SELECT * FROM pfr_dashboard.asloy_joined_table WHERE MEMBER_MAINCODE = ? AND DATE_OPER BETWEEN ? AND ? " +
-                "AND (MEMBER_BANK_NAME != 'отсутствует' OR MEMBER_BANK_ACCOUNT != 'отсутствует') " +
-                "ORDER BY DATE_OPER DESC";
+        String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Bank_bank.getPath(), iin);
+
         try {
-            turnoverRecords = jdbcTemplate.query(
-                    sql,
-                    new Object[]{iin, dateFrom, dateTo},
-                    mapper::mapRowToTurnover
-            );
+            turnoverRecords = jdbcTemplate.query(sql, mapper::mapRowToTurnover);
+            turnoverRecords.forEach(record -> record.setSumm(numberConverter.formatNumber(record.getSumm())));
         } catch (Exception e) {
-            log.error("Error fetching turnover records for IIN: {}, dateFrom: {}, dateTo: {}", iin, dateFrom, dateTo, e);
+            log.error("Error fetching turnover records for IIN: {}", iin, e);
             throw new IOException("Failed to fetch turnover records", e);
         }
 
-        Map<String, Turnover> turnoverMap = new HashMap<>();
-        for (TurnoverRecord record : turnoverRecords) {
-            String bank = record.getBank();
-            if (bank != null && !bank.trim().isEmpty()) {
-                Turnover turnover = turnoverMap.get(bank);
-                if (turnover == null) {
-                    turnover = Turnover.builder()
-                            .bank(bank)
-                            .account(record.getAccount() != null ? record.getAccount() : "")
-                            .summ(0L)
-                            .count(0)
-                            .positiveSumm(0L)
-                            .negativeSumm(0L)
-                            .build();
-                    turnoverMap.put(bank, turnover);
-                }
-                int amount = record.getAmount();
-                turnover.setSumm(turnover.getSumm() + amount);
-                turnover.setCount(turnover.getCount() + 1);
-                if (amount > 0) {
-                    turnover.setPositiveSumm(turnover.getPositiveSumm() + amount);
-                } else {
-                    turnover.setNegativeSumm(turnover.getNegativeSumm() + amount);
-                }
-            }
-        }
-
-        List<Turnover> turnovers = turnoverMap.values().stream().toList();
-
-        return turnovers;
+        return turnoverRecords.stream()
+                .filter(record -> record.getBankName() != null)
+                .collect(Collectors.groupingBy(TurnoverRecord::getBankName))
+                .entrySet().stream()
+                .map(entry -> BankTurnoverGroup.builder()
+                        .bankName(entry.getKey())
+                        .count(entry.getValue().size())
+                        .records(entry.getValue())
+                        .build()
+                )
+                .collect(Collectors.toList());
     }
 }
