@@ -15,6 +15,7 @@ import org.info.infobaza.model.info.active_income.RecordDt;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
 import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
+import org.info.infobaza.model.info.job.TurnoverRecord;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.service.enpf.ENPFService;
 import org.info.infobaza.service.enpf.HeadService;
@@ -79,6 +80,10 @@ public class WordExportServiceImpl implements WordExportService {
 
             Industry industry = industrialService.getIndustry(iin);
 
+            List<TurnoverRecord> turnoverRecords = enpfService.getTurnoverRecords(
+                    iin
+            );
+
             // Fetch Active and Income data
             ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
                     iin,
@@ -100,7 +105,7 @@ public class WordExportServiceImpl implements WordExportService {
             addPortraitSection(document, person);
             addRelationsSection(document, primaryRelations, secondaryRelations);
             addActivesAndIncomesSection(document, activeResponse, incomeResponse);
-            addJobInformationSection(document, pensions, head, industry);
+            addJobInformationSection(document, pensions, head, industry, turnoverRecords);
 
             // Write to output stream
             document.write(outputStream);
@@ -356,13 +361,24 @@ public class WordExportServiceImpl implements WordExportService {
         }
     }
 
-    private void addJobInformationSection(XWPFDocument document, List<Pension> pensions, Head head, Industry industry) {
+    private void addJobInformationSection(XWPFDocument document, List<Pension> pensions,
+                                          Head head, Industry industry,
+                                          List<TurnoverRecord> turnoverRecords) {
         // Industry section
         addBoldParagraph(document, "Отрасль:");
         addParagraph(document, industry != null && industry.getName() != null && !industry.getName().isEmpty()
                 ? industry.getName()
                 : "Информация об отрасли отсутствует");
         document.createParagraph();
+
+        // Pensions section
+        addBoldParagraph(document, "Пенсионные взносы:");
+        if (pensions != null && !pensions.isEmpty()) {
+            addPensionsTable(document, pensions);
+        } else {
+            addParagraph(document, "Нет данных о пенсионных взносах");
+        }
+
 
         // Head section
         addBoldParagraph(document, "Руководящие позиции:");
@@ -373,13 +389,16 @@ public class WordExportServiceImpl implements WordExportService {
         }
         document.createParagraph();
 
-        // Pensions section
-        addBoldParagraph(document, "Пенсионные взносы:");
-        if (pensions != null && !pensions.isEmpty()) {
-            addPensionsTable(document, pensions);
+        // Банковские счета
+        addBoldParagraph(document, "Банковские счета:");
+        if (!turnoverRecords.isEmpty()) {
+            addTurnoversTable(document, turnoverRecords);
         } else {
-            addParagraph(document, "Нет данных о пенсионных взносах");
+            addParagraph(document, "Нет информации о банковских счетах");
         }
+        document.createParagraph();
+
+
     }
 
     private void addHeadInformationTable(XWPFDocument document, Head head) {
@@ -481,6 +500,32 @@ public class WordExportServiceImpl implements WordExportService {
             setTableCell(row.getCell(1), pension.getDateTo() != null ? pension.getDateTo() : "N/A", false);
             setTableCell(row.getCell(2), pension.getName() != null ? pension.getName() : "N/A", false);
             setTableCell(row.getCell(3), pension.getP_RNN() != null ? pension.getP_RNN() : "N/A", false);
+        }
+    }
+
+    private void addTurnoversTable(XWPFDocument document, List<TurnoverRecord> turnoverRecords){
+        XWPFTable table = document.createTable(turnoverRecords.size() + 1, 7);
+        table.setWidth("100%");
+
+        XWPFTableRow headerRow = table.getRow(0);
+        setTableCell(headerRow.getCell(0), "ИИН/БИН", true);
+        setTableCell(headerRow.getCell(1), "Название банка", true);
+        setTableCell(headerRow.getCell(2), "Счет", true);
+        setTableCell(headerRow.getCell(3), "Сумма", true);
+        setTableCell(headerRow.getCell(4), "Дата от", true);
+        setTableCell(headerRow.getCell(5), "Дата до", true);
+        setTableCell(headerRow.getCell(6), "Источник", true);
+
+        int rowIndex = 1;
+        for (TurnoverRecord turnoverRecord : turnoverRecords) {
+            XWPFTableRow row = table.getRow(rowIndex++);
+            setTableCell(row.getCell(0), turnoverRecord.getIinBin() != null ? turnoverRecord.getIinBin() : "N/A", false);
+            setTableCell(row.getCell(1), turnoverRecord.getBankName() != null ? turnoverRecord.getBankName() : "N/A", false);
+            setTableCell(row.getCell(2), turnoverRecord.getBankAccount() != null ? turnoverRecord.getBankAccount() : "N/A", false);
+            setTableCell(row.getCell(3), turnoverRecord.getSumm() != null ? turnoverRecord.getSumm() : "N/A", false);
+            setTableCell(row.getCell(4), turnoverRecord.getStartDate() != null ? turnoverRecord.getStartDate() : "N/A", false);
+            setTableCell(row.getCell(5), turnoverRecord.getEndDate() != null ? turnoverRecord.getEndDate() : "N/A", false);
+            setTableCell(row.getCell(6), turnoverRecord.getSource() != null ? turnoverRecord.getSource() : "N/A", false);
         }
     }
 

@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.dto.response.job.BankTurnoverGroup;
 import org.info.infobaza.dto.response.job.Pension;
-import org.info.infobaza.dto.response.job.Turnover;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.model.info.job.TurnoverRecord;
 import org.info.infobaza.service.InformationalService;
@@ -13,12 +12,12 @@ import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.util.convert.NumberConverter;
 import org.info.infobaza.util.convert.SQLFileUtil;
+import org.info.infobaza.util.date.DateUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,6 +29,7 @@ public class ENPFService implements InformationalService {
     private final NumberConverter numberConverter;
     private final JdbcTemplate jdbcTemplate;
     private final SQLFileUtil sqlFileUtil;
+    private final DateUtil dateUtil;
     private final Mapper mapper;
 
 
@@ -57,7 +57,6 @@ public class ENPFService implements InformationalService {
 
         List<Pension> pensions = new ArrayList<>();
         List<InformationRecordDt> informationRecords;
-        DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("dd-M-yyyy");
 
         String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.Pension_pension.getPath(), iin, dateFrom, dateTo);
         try {
@@ -117,20 +116,47 @@ public class ENPFService implements InformationalService {
                 periodEndDate = LocalDate.parse(dateTo);
             }
 
-            String formattedStartDate = periodStartDate.format(outputFormatter);
-            String formattedEndDate = periodEndDate.format(outputFormatter);
+            String formattedStartDate = dateUtil.formatOutput(periodStartDate);
+            String formattedEndDate = dateUtil.formatOutput(periodEndDate);
 
+            double maxSalary = workplaceRecords.stream()
+                    .map(InformationRecordDt::getSumm)
+                    .filter(Objects::nonNull)
+                    .mapToDouble(amount -> {
+                        try {
+                            return Double.parseDouble(amount);
+                        } catch (NumberFormatException e) {
+                            log.warn("Invalid AMOUNT format: {}, defaulting to 0", amount);
+                            return 0;
+                        }
+                    })
+                    .max()
+                    .orElse(0);
+
+            Double lastSalary = (Double) workplaceRecords.stream()
+                    .filter(record -> record.getSumm() != null)
+                    .max(Comparator.comparing(InformationRecordDt::getDate))
+                    .map(record -> {
+                        try {
+                            return Double.parseDouble(record.getSumm());
+                        } catch (NumberFormatException e) {
+                            log.warn("Invalid AMOUNT format for last record: {}, defaulting to 0", record.getSumm());
+                            return 0;
+                        }
+                    })
+                    .orElse(0);
             Pension pension = new Pension(
                     formattedStartDate,
                     formattedEndDate,
                     entry.getValue().get(0).getDopinfo(),
-                    entry.getKey()
+                    entry.getKey(),
+                    maxSalary,
+                    lastSalary
             );
             pensions.add(pension);
         }
 
-        pensions.sort(Comparator.comparing(p -> LocalDate.parse(p.getDateFrom(), outputFormatter)));
-        return pensions;
+        pensions.sort(Comparator.comparing(p -> dateUtil.parseOutputDate(p.getDateFrom()), Comparator.nullsLast(LocalDate::compareTo)));        return pensions;
     }
 
     public List<BankTurnoverGroup> getTurnover(String iin) throws IOException {
@@ -143,7 +169,13 @@ public class ENPFService implements InformationalService {
 
         try {
             turnoverRecords = jdbcTemplate.query(sql, mapper::mapRowToTurnover);
-            turnoverRecords.forEach(record -> record.setSumm(numberConverter.formatNumber(record.getSumm())));
+            turnoverRecords.forEach(record -> {
+                log.info("DATE IS: {}", record.getStartDate());
+                record.setSumm(numberConverter.formatNumber(record.getSumm()));
+
+                record.setStartDate(dateUtil.formatTimeToCustom(record.getStartDate()));
+                record.setEndDate(dateUtil.formatTimeToCustom(record.getEndDate()));
+            });
         } catch (Exception e) {
             log.error("Error fetching turnover records for IIN: {}", iin, e);
             throw new IOException("Failed to fetch turnover records", e);
@@ -160,5 +192,30 @@ public class ENPFService implements InformationalService {
                         .build()
                 )
                 .collect(Collectors.toList());
+    }
+
+    public List<TurnoverRecord> getTurnoverRecords(String iin) throws IOException {
+        if (iin == null || iin.trim().isEmpty()) {
+            throw new IllegalArgumentException("IIN cannot be null or empty");
+        }
+
+        List<TurnoverRecord> turnoverRecords;
+        String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Bank_bank.getPath(), iin);
+
+        try {
+            turnoverRecords = jdbcTemplate.query(sql, mapper::mapRowToTurnover);
+            turnoverRecords.forEach(record -> {
+                log.info("DATE IS: {}", record.getStartDate());
+                record.setSumm(numberConverter.formatNumber(record.getSumm()));
+
+                record.setStartDate(dateUtil.formatTimeToCustom(record.getStartDate()));
+                record.setEndDate(dateUtil.formatTimeToCustom(record.getEndDate()));
+            });
+        } catch (Exception e) {
+            log.error("Error fetching turnover records for IIN: {}", iin, e);
+            throw new IOException("Failed to fetch turnover records", e);
+        }
+
+        return turnoverRecords;
     }
 }

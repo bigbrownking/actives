@@ -21,6 +21,7 @@ import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.util.convert.NumberConverter;
 import org.info.infobaza.util.convert.SQLFileUtil;
+import org.info.infobaza.util.date.DateUtil;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -29,7 +30,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -42,12 +42,13 @@ public class PortretService {
 
     private final JdbcTemplate jdbcTemplate;
     private final SQLFileUtil sqlFileUtil;
+    private final DateUtil dateUtil;
     private final Mapper mapper;
     private final RestTemplate restTemplate;
     private final JwtTokenUtil jwtTokenUtil;
     private final NumberConverter numberConverter;
 
-    private static final String DATE_FORMAT = "yyyy-MM-dd";
+
     private static final String IIN_PATTERN = "\\d{12}";
 
     @Data
@@ -214,10 +215,8 @@ public class PortretService {
         Age age = null;
         if (birthDateStr != null && !birthDateStr.isEmpty()) {
             try {
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(DATE_FORMAT);
-                LocalDate birthDate = LocalDate.parse(birthDateStr, formatter);
-                LocalDate deathDate = deathDateStr != null && !deathDateStr.isEmpty()
-                        ? LocalDate.parse(deathDateStr, formatter) : null;
+                LocalDate birthDate = dateUtil.formatPortretDate(birthDateStr);
+                LocalDate deathDate = dateUtil.formatPortretDate(deathDateStr);
                 age = numberConverter.getAgeByDates(new LocalDate[]{birthDate, deathDate});
             } catch (Exception e) {
                 log.error("Failed to parse birth/death dates for IIN: {}. Error: {}", iin, e.getMessage());
@@ -348,15 +347,14 @@ public class PortretService {
 
         String sql = "SELECT BIRTH_DATE, DEATH_DATE FROM gbd_fl0205.person_info WHERE IIN = ?";
         try {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
             LocalDate[] userDates = jdbcTemplate.queryForObject(
                     sql,
                     (rs, rowNum) -> {
                         String birthDateStr = rs.getString("BIRTH_DATE");
                         String deathDateStr = rs.getString("DEATH_DATE");
-                        LocalDate birthDate = !birthDateStr.isEmpty() ? LocalDate.parse(birthDateStr, formatter) : null;
-                        LocalDate deathDate = !deathDateStr.isEmpty() ? LocalDate.parse(deathDateStr, formatter) : null;
+                        LocalDate birthDate = dateUtil.formatAgeDate(birthDateStr);
+                        LocalDate deathDate = dateUtil.formatAgeDate(deathDateStr);
                         return new LocalDate[]{birthDate, deathDate};
                     },
                     iin

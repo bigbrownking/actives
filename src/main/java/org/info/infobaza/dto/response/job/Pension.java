@@ -13,4 +13,6 @@ public class Pension {
     private String dateTo;
     private String name;
     private String P_RNN;
+    private Double maxSalary;
+    private Double lastSalary;
 }

@@ -13,5 +13,8 @@ public class TurnoverRecord {
     private String bankName;
     private String bankAccount;
     private String summ;
+    private String startDate;
+    private String endDate;
+    private String source;
 
 }

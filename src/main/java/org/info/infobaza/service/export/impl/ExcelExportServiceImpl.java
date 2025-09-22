@@ -19,6 +19,7 @@ import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
 import org.info.infobaza.model.info.active_income.RecordDt;
 import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
+import org.info.infobaza.model.info.job.TurnoverRecord;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.service.enpf.ENPFService;
 import org.info.infobaza.service.enpf.HeadService;
@@ -80,7 +81,13 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                     iin,
                     dateFrom, dateTo);
 
-            Industry industry = industrialService.getIndustry(iin);
+            Industry industry = industrialService.getIndustry(
+                    iin
+            );
+
+            List<TurnoverRecord> turnoverRecords = enpfService.getTurnoverRecords(
+                    iin
+            );
 
             ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
                     iin,
@@ -103,7 +110,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             rowIndex = addPortraitSection(workbook, sheet, rowIndex, person);
             rowIndex = addRelationsSection(sheet, rowIndex, primaryRelations, secondaryRelations);
             rowIndex = addActivesAndIncomesSection(sheet, rowIndex, activeResponse, incomeResponse);
-            rowIndex = addJobInformationSection(sheet, rowIndex, pensions, head, industry);
+            rowIndex = addJobInformationSection(sheet, rowIndex, pensions, head, industry, turnoverRecords);
 
             for (int i = 0; i < 9; i++) {
                 sheet.autoSizeColumn(i);
@@ -350,13 +357,25 @@ public class ExcelExportServiceImpl implements ExcelExportService {
         return rowIndex;
     }
 
-    private int addJobInformationSection(XSSFSheet sheet, int rowIndex, List<Pension> pensions, Head head, Industry industry) {
+    private int addJobInformationSection(XSSFSheet sheet, int rowIndex,
+                                         List<Pension> pensions, Head head,
+                                         Industry industry, List<TurnoverRecord> turnoverRecords) {
         // Industry section
         rowIndex = addBoldRow(sheet, rowIndex, "Отрасль:");
         rowIndex = addRow(sheet, rowIndex, industry != null && industry.getName() != null && !industry.getName().isEmpty()
                 ? industry.getName()
                 : "Информация об отрасли отсутствует");
         rowIndex++;
+
+
+        // Pensions section
+        rowIndex = addBoldRow(sheet, rowIndex, "Пенсионные взносы:");
+        if (pensions != null && !pensions.isEmpty()) {
+            rowIndex = addPensionsTable(sheet, rowIndex, pensions);
+        } else {
+            rowIndex = addRow(sheet, rowIndex, "Нет данных о пенсионных взносах");
+        }
+
 
         // Head section
         rowIndex = addBoldRow(sheet, rowIndex, "Руководящие позиции:");
@@ -367,13 +386,15 @@ public class ExcelExportServiceImpl implements ExcelExportService {
         }
         rowIndex++;
 
-        // Pensions section
-        rowIndex = addBoldRow(sheet, rowIndex, "Пенсионные взносы:");
-        if (pensions != null && !pensions.isEmpty()) {
-            rowIndex = addPensionsTable(sheet, rowIndex, pensions);
+
+        // Turnover section
+        rowIndex = addBoldRow(sheet, rowIndex, "Банковские счета:");
+        if (turnoverRecords != null && !turnoverRecords.isEmpty()) {
+            rowIndex = addTurnoversTable(sheet, rowIndex, turnoverRecords);
         } else {
-            rowIndex = addRow(sheet, rowIndex, "Нет данных о пенсионных взносах");
+            rowIndex = addRow(sheet, rowIndex, "Нет информации о банковских счетах");
         }
+
         return rowIndex;
     }
 
@@ -462,6 +483,30 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             setCell(row, 1, pension.getDateTo() != null ? pension.getDateTo() : "N/A", false);
             setCell(row, 2, pension.getName() != null ? pension.getName() : "N/A", false);
             setCell(row, 3, pension.getP_RNN() != null ? pension.getP_RNN() : "N/A", false);
+        }
+        return rowIndex;
+    }
+
+    private int addTurnoversTable(XSSFSheet sheet, int rowIndex,
+                                   List<TurnoverRecord> turnoverRecords){
+        XSSFRow headerRow = sheet.createRow(rowIndex++);
+        setCell(headerRow, 0, "ИИН/БИН", true);
+        setCell(headerRow, 1, "Название банка", true);
+        setCell(headerRow, 2, "Счет", true);
+        setCell(headerRow, 3, "Сумма", true);
+        setCell(headerRow, 4, "Дата от", true);
+        setCell(headerRow, 5, "Дата до", true);
+        setCell(headerRow, 6, "Источник", true);
+
+        for (TurnoverRecord turnoverRecord : turnoverRecords) {
+            XSSFRow row = sheet.createRow(rowIndex++);
+            setCell(row, 0, turnoverRecord.getIinBin() != null ? turnoverRecord.getIinBin() : "N/A", false);
+            setCell(row, 1, turnoverRecord.getBankName() != null ? turnoverRecord.getBankName() : "N/A", false);
+            setCell(row, 2, turnoverRecord.getBankAccount() != null ? turnoverRecord.getBankAccount() : "N/A", false);
+            setCell(row, 3, turnoverRecord.getSumm() != null ? turnoverRecord.getSumm() : "N/A", false);
+            setCell(row, 4, turnoverRecord.getStartDate() != null ? turnoverRecord.getStartDate() : "N/A", false);
+            setCell(row, 5, turnoverRecord.getEndDate() != null ? turnoverRecord.getEndDate() : "N/A", false);
+            setCell(row, 6, turnoverRecord.getSource() != null ? turnoverRecord.getSource() : "N/A", false);
         }
         return rowIndex;
     }

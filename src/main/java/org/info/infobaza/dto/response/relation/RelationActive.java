@@ -2,12 +2,14 @@ package org.info.infobaza.dto.response.relation;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.ToString;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 
 import java.util.List;
 
 @Getter
 @Builder
+@ToString
 public class RelationActive {
     private String relation;
     private String fio;

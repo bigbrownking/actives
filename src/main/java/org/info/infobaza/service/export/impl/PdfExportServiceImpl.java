@@ -20,6 +20,7 @@ import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.model.info.active_income.RecordDt;
 import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
+import org.info.infobaza.model.info.job.TurnoverRecord;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.service.enpf.ENPFService;
 import org.info.infobaza.service.enpf.HeadService;
@@ -89,6 +90,10 @@ public class PdfExportServiceImpl implements PdfExportService {
                 iin
         );
 
+        List<TurnoverRecord> turnoverRecords = enpfService.getTurnoverRecords(
+                iin
+        );
+
         // Fetch Active and Income data
         ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
                 iin,
@@ -128,7 +133,7 @@ public class PdfExportServiceImpl implements PdfExportService {
             addPortraitSection(document, person, font);
             addRelationsSection(document, primaryRelations, secondaryRelations, font, boldFont);
             addActivesAndIncomesSection(document, activeResponse, incomeResponse, font, boldFont);
-            addJobInformationSection(document, pensions, head, industry, font, boldFont);
+            addJobInformationSection(document, pensions, head, industry, turnoverRecords, font, boldFont);
 
         } finally {
             document.close();
@@ -238,7 +243,8 @@ public class PdfExportServiceImpl implements PdfExportService {
     }
 
     private void addJobInformationSection(Document document, List<Pension> pensions, Head head,
-                                          Industry industry, Font font, Font boldFont) throws DocumentException {
+                                          Industry industry, List<TurnoverRecord> turnoverRecords,
+                                          Font font, Font boldFont) throws DocumentException {
         // Add Industry section
         document.add(new Paragraph(" ", font));
         document.add(new Paragraph("Отрасль:", boldFont));
@@ -248,6 +254,17 @@ public class PdfExportServiceImpl implements PdfExportService {
             document.add(new Paragraph(industry.getName(), font));
         } else {
             document.add(new Paragraph("Информация об отрасли отсутствует", font));
+        }
+
+        // Add Pensions section
+        document.add(new Paragraph(" ", font));
+        document.add(new Paragraph("Пенсионные взносы:", boldFont));
+        document.add(new Paragraph(" ", font));
+
+        if (pensions != null && !pensions.isEmpty()) {
+            addPensionsTable(document, pensions, font, boldFont);
+        } else {
+            document.add(new Paragraph("Нет данных о пенсионных взносах", font));
         }
 
         // Add Head section
@@ -262,16 +279,18 @@ public class PdfExportServiceImpl implements PdfExportService {
             document.add(new Paragraph("Нет информации о руководящих позициях", font));
         }
 
-        // Add Pensions section
+        // Add Turnover section
         document.add(new Paragraph(" ", font));
-        document.add(new Paragraph("Пенсионные взносы:", boldFont));
+        document.add(new Paragraph("Банковские счета:", boldFont));
         document.add(new Paragraph(" ", font));
 
-        if (pensions != null && !pensions.isEmpty()) {
-            addPensionsTable(document, pensions, font, boldFont);
+        if (!turnoverRecords.isEmpty()) {
+            document.add(new Paragraph(" ", font));
+            addTurnoversTable(document, turnoverRecords, font, boldFont);
         } else {
-            document.add(new Paragraph("Нет данных о пенсионных взносах", font));
+            document.add(new Paragraph("Нет информации о банковских счетах", font));
         }
+
     }
 
     private void addHeadInformationTable(Document document, Head head, Font font, Font boldFont) throws DocumentException {
@@ -387,6 +406,34 @@ public class PdfExportServiceImpl implements PdfExportService {
         }
 
         document.add(pensionsTable);
+    }
+
+    private void addTurnoversTable(Document document, List<TurnoverRecord> turnoverRecords, Font font, Font boldFont) throws DocumentException {
+        PdfPTable turnoversTable = new PdfPTable(7);
+        turnoversTable.setWidthPercentage(100);
+        turnoversTable.setWidths(new float[]{2, 2, 3, 2, 2, 2, 2});
+        turnoversTable.setSpacingBefore(5);
+        turnoversTable.setSpacingAfter(10);
+
+        addTableHeader(turnoversTable, "ИИН/БИН", boldFont);
+        addTableHeader(turnoversTable, "Название банка", boldFont);
+        addTableHeader(turnoversTable, "Счет", boldFont);
+        addTableHeader(turnoversTable, "Сумма", boldFont);
+        addTableHeader(turnoversTable, "Дата от", boldFont);
+        addTableHeader(turnoversTable, "Дата до", boldFont);
+        addTableHeader(turnoversTable, "Источник", boldFont);
+
+        for (TurnoverRecord turnoverRecord : turnoverRecords) {
+            addTableCell(turnoversTable, turnoverRecord.getIinBin() != null ? turnoverRecord.getIinBin() : "N/A", font);
+            addTableCell(turnoversTable, turnoverRecord.getBankName() != null ? turnoverRecord.getBankName() : "N/A", font);
+            addTableCell(turnoversTable, turnoverRecord.getBankAccount() != null ? turnoverRecord.getBankAccount() : "N/A", font);
+            addTableCell(turnoversTable, turnoverRecord.getSumm() != null ? turnoverRecord.getSumm() : "N/A", font);
+            addTableCell(turnoversTable, turnoverRecord.getStartDate() != null ? turnoverRecord.getStartDate() : "N/A", font);
+            addTableCell(turnoversTable, turnoverRecord.getEndDate() != null ? turnoverRecord.getEndDate() : "N/A", font);
+            addTableCell(turnoversTable, turnoverRecord.getSource() != null ? turnoverRecord.getSource() : "N/A", font);
+        }
+
+        document.add(turnoversTable);
     }
 
     private void addRelationsTable(Document document, Map<String, List<RelationActive>> relationsMap, Font font, Font boldFont) throws DocumentException {

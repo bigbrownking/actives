@@ -66,18 +66,24 @@ public class RelationService {
                     List<String> rawStatuses = entry.getValue();
                     Set<String> uniqueStatuses = new LinkedHashSet<>(rawStatuses);
                     List<String> statuses = new ArrayList<>(uniqueStatuses);
-
                     List<String> processedStatuses = statuses.stream().map(status -> {
-                        if (status.startsWith("Доверенность")) {
+                        if (status.equals("Доверенность")) {
                             Optional<RelationRecord> matchingRecord = relations.stream()
-                                    .filter(r -> r.getIin_2().equals(iin2) && r.getStatus().equals(status))
+                                    .filter(r -> r.getIin_2().equals(iin2) &&
+                                            r.getStatus().equals(status) && r.getIin_1().equals(iin))
                                     .findFirst();
-                            String vidSviazi = matchingRecord.map(RelationRecord::getVid_sviazi).get();
-                            int iinPos = vidSviazi.indexOf(iin);
-                            if (iinPos >= 0) {
-                                return "Доверитель";
-                            } else {
-                                return "Поверенный";
+                            if (matchingRecord.isPresent()) {
+                                RelationRecord record = matchingRecord.get();
+                                String vidSviazi = record.getVid_sviazi();
+                                if (vidSviazi != null && !vidSviazi.isEmpty()) {
+                                    String iin1 = record.getIin_1();
+                                    String iin2Value = record.getIin_2();
+                                    if (vidSviazi.startsWith(iin1)) {
+                                        return "Доверитель";
+                                    } else if (vidSviazi.startsWith(iin2Value)) {
+                                        return "Поверенный";
+                                    }
+                                }
                             }
                         }
                         return status;
@@ -94,10 +100,9 @@ public class RelationService {
                     return representative;
                 })
                 .filter(Objects::nonNull)
-                .distinct()
                 .collect(Collectors.toList());
 
-        List<RelationActive> relationActives = analyzer.toRelationActives(keepDistinctRelations(processedRelations), dateFrom, dateTo);
+        List<RelationActive> relationActives = analyzer.toRelationActives(processedRelations, dateFrom, dateTo);
         Map<String, List<RelationActive>> typeToRelation = new HashMap<>();
         for (RelationRecord rr : processedRelations) {
             String status = rr.getStatus();
@@ -106,7 +111,9 @@ public class RelationService {
             if (category != null) {
                 relationActives.stream()
                         .filter(active -> active.getIin().equals(rr.getIin_2()))
-                        .findFirst().ifPresent(ra -> typeToRelation.computeIfAbsent(category, k -> new ArrayList<>()).add(ra));
+                        .findFirst().ifPresent(ra -> {
+                            typeToRelation.computeIfAbsent(category, k -> new ArrayList<>()).add(ra);
+                        });
             }
         }
 

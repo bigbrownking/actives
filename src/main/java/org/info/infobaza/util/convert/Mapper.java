@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
@@ -189,7 +190,10 @@ public class Mapper {
                rs.getString("iin_bin"),
                rs.getString("bank_name"),
                rs.getString("bank_account"),
-               rs.getString("summ")
+               rs.getString("summ"),
+               rs.getString("start_date"),
+               rs.getString("end_date"),
+               rs.getString("db_source")
         );
     }
     public HistorySupervisorRecord mapRowToHistorySupervisor(ResultSet rs, int rowNum) throws SQLException {
