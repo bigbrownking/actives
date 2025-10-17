@@ -3,6 +3,7 @@ package org.info.infobaza.service.enpf;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.constants.QueryLocationDictionary;
+import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.dto.response.job.Head;
 import org.info.infobaza.model.info.active_income.EsfOverall;
 import org.info.infobaza.model.info.job.CompanyRecord;
@@ -10,6 +11,7 @@ import org.info.infobaza.model.info.job.HistorySupervisorRecord;
 import org.info.infobaza.model.info.job.StatusRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.service.Analyzer;
+import org.info.infobaza.service.portret.PortretService;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.util.convert.SQLFileUtil;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -27,6 +29,7 @@ public class HeadService {
     private final JdbcTemplate jdbcTemplate;
     private final Mapper mapper;
     private final SQLFileUtil sqlFileUtil;
+    private final PortretService portretService;
     private final Analyzer analyzer;
 
     public Head constructHead(String iin, String dateFrom, String dateTo) throws IOException {
@@ -86,8 +89,9 @@ public class HeadService {
             log.warn("No учредитель found for IIN: {}", iin);
         }
 
-        makeHistory(supervisorRecordSup, historySupervisorRecordSup);
-        makeHistory(supervisorRecordFou, historySupervisorRecordFou);
+        addHistoricalRecords(supervisorRecordSup, historySupervisorRecordSup, "Руководитель");
+        addHistoricalRecords(supervisorRecordFou, historySupervisorRecordFou, "Учредитель");
+
 
         if (supervisorRecordSup.isEmpty() && supervisorRecordFou.isEmpty()) {
             return new ArrayList<>();
@@ -105,22 +109,34 @@ public class HeadService {
         return new ArrayList<>();
     }
 
-    private List<SupervisorRecord> makeHistory(List<SupervisorRecord> supervisorRecords, List<HistorySupervisorRecord> historySupervisorRecords){
-        List<String> historicalIinBins = historySupervisorRecords.stream()
-                .map(HistorySupervisorRecord::getIinBin)
-                .toList();
+    private void addHistoricalRecords(List<SupervisorRecord> currentRecords,
+                                      List<HistorySupervisorRecord> historyRecords,
+                                      String positionType) throws IOException {
+        Set<String> currentCompanyIins = currentRecords.stream()
+                .map(SupervisorRecord::getTaxpayer_iin_bin)
+                .filter(x -> !x.isEmpty())
+                .collect(Collectors.toSet());
 
-        supervisorRecords.forEach(record -> {
-            if (historicalIinBins.contains(record.getIin_bin())) {
-                String currentPositionType = record.getPositionType();
-                if (currentPositionType != null && !currentPositionType.startsWith("Исторический ")) {
-                    record.setPositionType("Исторический " + currentPositionType);
-                }
+        for (HistorySupervisorRecord histRecord : historyRecords) {
+            String companyIin = histRecord.getIinBinCompany();
+            if(companyIin == null || companyIin.isEmpty()) continue;
+            if (!currentCompanyIins.contains(companyIin)) {
+                IinInfo info = portretService.getIinInfo(companyIin);
+                if(info == null) continue;
+                String name = info.getName();
+                SupervisorRecord historicalRecord = SupervisorRecord.builder()
+                        .iin_bin(histRecord.getIinBin())
+                        .positionType("Исторический " + positionType)
+                        .taxpayer_iin_bin(companyIin)
+                        .taxpayerType(null)
+                        .taxpayerName(name)
+                        .build();
+
+                currentRecords.add(historicalRecord);
             }
-        });
-
-        return supervisorRecords;
+        }
     }
+
 
     private List<CompanyRecord> getCompanyInfo(String iin) throws IOException {
         if (iin == null || iin.trim().isEmpty()) {
@@ -176,7 +192,7 @@ public class HeadService {
 
 
     private List<SupervisorRecord> keepDistinctSupervisorRecords(List<SupervisorRecord> supervisorRecords) {
-        return supervisorRecords.stream().distinct().toList();
+        return supervisorRecords.stream().filter(x -> !x.getTaxpayer_iin_bin().isEmpty()).distinct().toList();
     }
 
 

@@ -15,6 +15,6 @@ public class ActiveWithRecords implements ActiveResponse{
     private String dateFrom;
     private String dateTo;
     private List<String> selectedYears;
-    private Map<String, List<RecordDt>> recordsByOper;
+    private List<RecordDt> recordsByOper;
     private Map<String, List<String>> iinToRelation;
 }

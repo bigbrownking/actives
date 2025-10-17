@@ -14,15 +14,13 @@ import org.info.infobaza.dto.response.info.income.OverallIncome;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyCount;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyRecordCounts;
 import org.info.infobaza.dto.response.relation.RelationActive;
-import org.info.infobaza.model.info.active_income.ActiveOverall;
-import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
-import org.info.infobaza.model.info.active_income.InformationRecordDt;
-import org.info.infobaza.model.info.active_income.RecordDt;
+import org.info.infobaza.model.info.active_income.*;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.model.info.person.RelationRecord;
 import org.info.infobaza.service.enpf.HeadService;
 import org.info.infobaza.service.nao_con.NaoConService;
 import org.info.infobaza.service.portret.PortretService;
+import org.info.infobaza.util.convert.IinChecker;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.util.convert.NumberConverter;
 import org.info.infobaza.util.convert.SQLFileUtil;
@@ -33,6 +31,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
@@ -41,6 +40,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -55,11 +55,12 @@ public class Analyzer {
     private final JdbcTemplate jdbcTemplate;
     private final Mapper mapper;
     private final SQLFileUtil sqlFileUtil;
+    private final IinChecker iinChecker;
     private final NumberConverter numberConverter;
     private final NaoConService naoConService;
 
     @Autowired
-    public void setHeadService(@Lazy HeadService headService){
+    public void setHeadService(@Lazy HeadService headService) {
         this.headService = headService;
     }
 
@@ -78,10 +79,10 @@ public class Analyzer {
     private Map<String, List<String>> fetchRelationsForMainIin(String mainIin) {
         try {
             String primarySql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Связи_Семейные.getPath(), mainIin);
-            List<RelationRecord> primaryRelations = jdbcTemplate.query(primarySql, mapper::mapRowToRelation);
+            List<RelationRecord> primaryRelations = jdbcTemplate.query(primarySql, mapper::mapRowToPriRelation);
 
             String secondarySql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Связи_Косвенные.getPath(), mainIin);
-            List<RelationRecord> secondaryRelations = jdbcTemplate.query(secondarySql, mapper::mapRowToRelation);
+            List<RelationRecord> secondaryRelations = jdbcTemplate.query(secondarySql, mapper::mapRowToSecRelation);
 
             Map<String, List<String>> iinToStatuses = new HashMap<>(primaryRelations.size() + secondaryRelations.size());
             primaryRelations.forEach(rel ->
@@ -132,15 +133,21 @@ public class Analyzer {
         Double totalActives = calculateTotalActivesForPerson(iin, dateFrom, dateTo);
         Double totalIncomes = calculateTotalIncomeByIIN(iin, dateFrom, dateTo);
         List<SupervisorRecord> head = headService.getType(iin);
-
+        Map<String, String> dopinfo = relationRecord.getDopinfo();
+        dopinfo.put("vid_sviazi", relationRecord.getVid_sviazi());
+        int level = relationRecord.getLevel_rod();
+        if(level != 0){
+            dopinfo = null;
+        }
         return RelationActive.builder()
                 .relation(relationRecord.getStatus())
                 .fio(iinInfo != null ? iinInfo.getName() : "Unknown")
                 .iin(iin)
                 .actives(totalActives != null ? numberConverter.formatNumber(totalActives) : "0")
                 .incomes(totalIncomes != null ? numberConverter.formatNumber(totalIncomes) : "0")
-                .head(head)
-                .level(relationRecord.getLevel_rod())
+                .dopinfo(dopinfo)
+                //.head(head)
+                .level(level)
                 .isNominal(portretService.isNominal(iin))
                 .build();
     }
@@ -171,6 +178,9 @@ public class Analyzer {
                                                         List<String> iins) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
         List<ESFInformationRecordDt> allEsfRecords = new ArrayList<>();
+        List<NaoConRecordDt> naoConRecordDs = new ArrayList<>();
+
+
         Map<String, List<String>> filteredIinToRelation = populateIinToRelation(iin, iins);
 
         List<String> involvedIins = new ArrayList<>(iins != null ? iins.size() + 1 : 1);
@@ -182,10 +192,10 @@ public class Analyzer {
                 : Dictionary.getActiveMethodsBySource().keySet();
 
         processRecords(involvedIins, dateFrom, dateTo, years, targetSources, vids, types,
-                allInfoRecords, allEsfRecords, true);
+                allInfoRecords, allEsfRecords, naoConRecordDs, true);
 
         ActiveResponse activeResult = toActive(keepDistinctInfo(allInfoRecords),
-                keepDistinctEsf(allEsfRecords),
+                keepDistinctEsf(allEsfRecords), keepDistinctNao(naoConRecordDs),
                 dateFrom, dateTo, years, involvedIins);
         setIinToRelation(activeResult, filteredIinToRelation);
         return activeResult;
@@ -206,7 +216,7 @@ public class Analyzer {
                 : Dictionary.getIncomeMethodsBySource().keySet();
 
         processRecords(involvedIins, dateFrom, dateTo, years, targetSources, vids, null,
-                allInfoRecords, null, false);
+                allInfoRecords, null, null, false);
 
         IncomeResponse incomeResult = toIncome(keepDistinctInfo(allInfoRecords), dateFrom, dateTo, years, involvedIins);
         setIinToRelation(incomeResult, filteredIinToRelation);
@@ -216,10 +226,13 @@ public class Analyzer {
     private void processRecords(List<String> iins, String dateFrom, String dateTo, List<String> years,
                                 Set<String> sources, List<String> vids, List<String> types,
                                 List<InformationRecordDt> infoRecords, List<ESFInformationRecordDt> esfRecords,
+                                List<NaoConRecordDt> naoConRecordDs,
                                 boolean isActive) {
         List<String> effectiveYears = years != null && !years.isEmpty() ? years : List.of("");
 
+        String mainIin = iins.get(0);
         iins.parallelStream().forEach(currentIin -> {
+            boolean isUl = iinChecker.isUl(currentIin);
             for (String year : effectiveYears) {
                 String effectiveDateFrom = year.isEmpty() ? dateFrom : year + "-01-01";
                 String effectiveDateTo = year.isEmpty() ? dateTo : year + "-12-31";
@@ -248,12 +261,34 @@ public class Analyzer {
                                 if (result instanceof List<?> resultList && !resultList.isEmpty()) {
                                     Object first = resultList.get(0);
                                     if (isActive && first instanceof ESFInformationRecordDt) {
+                                        List<ESFInformationRecordDt> filteredRecords = isUl
+                                                ? resultList.stream()
+                                                .map(ESFInformationRecordDt.class::cast)
+                                                .filter(record -> (currentIin.equals(record.getIin_bin_pokup()) && mainIin.equals(record.getIin_bin_prod())) ||
+                                                        (currentIin.equals(record.getIin_bin_prod()) && mainIin.equals(record.getIin_bin_pokup())))
+                                                .toList()
+                                                : resultList.stream().map(ESFInformationRecordDt.class::cast).toList();
+                                        log.debug("ESF records for iin={}, isUl={}: {} records before filter, {} after",
+                                                currentIin, isUl, resultList.size(), filteredRecords.size());
                                         synchronized (esfRecords) {
-                                            esfRecords.addAll((List<ESFInformationRecordDt>) resultList);
+                                            esfRecords.addAll(filteredRecords);
                                         }
                                     } else if (first instanceof InformationRecordDt) {
                                         synchronized (infoRecords) {
                                             infoRecords.addAll((List<InformationRecordDt>) resultList);
+                                        }
+                                    } else if (first instanceof NaoConRecordDt) {
+                                        List<NaoConRecordDt> filteredRecords = isUl
+                                                ? resultList.stream()
+                                                .map(NaoConRecordDt.class::cast)
+                                                .filter(record -> currentIin.equals(record.getIin_bin_pokup()) && mainIin.equals(record.getIin_bin_prod()) ||
+                                                        (currentIin.equals(record.getIin_bin_prod()) && mainIin.equals(record.getIin_bin_pokup())))
+                                                .toList()
+                                                : resultList.stream().map(NaoConRecordDt.class::cast).toList();
+                                        log.debug("NaoCon records for iin={}, isUl={}: {} records before filter, {} after",
+                                                currentIin, isUl, resultList.size(), filteredRecords.size());
+                                        synchronized (naoConRecordDs) {
+                                            naoConRecordDs.addAll(filteredRecords);
                                         }
                                     }
                                 }
@@ -297,15 +332,23 @@ public class Analyzer {
             return buildOverallIncome(filteredRecords, dateFrom, dateTo, years, iins);
         } else {
             List<RecordDt> recordsByYear = filteredRecords.stream()
-                    .map(record -> InformationRecordDt.builder()
-                            .iin_bin(record.getIin_bin())
-                            .date(record.getDate())
-                            .database(record.getDatabase())
-                            .oper(record.getOper())
-                            .aktivy(record.getAktivy())
-                            .dopinfo(record.getDopinfo())
-                            .summ(record.getSumm() != null ? numberConverter.formatNumber(record.getSumm()) : null)
-                            .build())
+                    .map(record -> {
+                        try {
+                            return InformationRecordDt.builder()
+                                    .iin_bin(record.getIin_bin())
+                                    .name(portretService.getIinInfo(record.getIin_bin()).getName())
+                                    .date(record.getDate())
+                                    .database(record.getDatabase())
+                                    .oper(record.getOper())
+                                    .aktivy(record.getAktivy())
+                                    .dopinfo(record.getDopinfo())
+                                    .summ(record.getSumm() != null ? numberConverter.formatNumber(record.getSumm()) : null)
+                                    .build();
+                        } catch (IOException e) {
+                            log.error("oops....");
+                        }
+                        return null;
+                    })
                     .collect(Collectors.toList());
 
             return IncomeWithRecords.builder()
@@ -317,7 +360,8 @@ public class Analyzer {
         }
     }
 
-    private List<InformationRecordDt> filterAndSortRecords(List<InformationRecordDt> records, List<String> years, boolean isSummaryMode) {
+    private List<InformationRecordDt> filterAndSortRecords
+            (List<InformationRecordDt> records, List<String> years, boolean isSummaryMode) {
         return records.stream()
                 .filter(Objects::nonNull)
                 .filter(record -> record.getDate() != null && record.getOper() != null)
@@ -327,7 +371,8 @@ public class Analyzer {
                 .collect(Collectors.toList());
     }
 
-    private IncomeResponse buildEmptyIncomeResponse(String dateFrom, String dateTo, List<String> years, boolean isSummaryMode) {
+    private IncomeResponse buildEmptyIncomeResponse(String dateFrom, String dateTo, List<String> years,
+                                                    boolean isSummaryMode) {
         log.warn("No income records provided for date range {} to {}, years: {}", dateFrom, dateTo, years);
         return isSummaryMode
                 ? OverallIncome.builder()
@@ -425,11 +470,16 @@ public class Analyzer {
                 .build();
     }
 
-    private double parseDoubleOrZero(String summ, String iin, String year) {
+    private double parseDoubleOrZero(String summ, String iin, String oper) {
+        if (summ == null || summ.trim().isEmpty()) {
+            log.warn("Null or empty summ for iin_bin={}, oper={}", iin, oper);
+            return 0.0;
+        }
         try {
-            return summ != null && !summ.trim().isEmpty() ? Double.parseDouble(summ.trim()) : 0.0;
+            String cleanedSumm = summ.replaceAll("[^0-9.-]", "");
+            return Double.parseDouble(cleanedSumm);
         } catch (NumberFormatException e) {
-            log.error("Invalid summ value '{}' for IIN: {}, year: {}", summ, iin, year, e);
+            log.error("Invalid summ value '{}' for iin_bin={}, oper={}: {}", summ, iin, oper, e.getMessage());
             return 0.0;
         }
     }
@@ -461,12 +511,15 @@ public class Analyzer {
 
     public ActiveResponse toActive(List<InformationRecordDt> informationRecords,
                                    List<ESFInformationRecordDt> esfInformationRecords,
+                                   List<NaoConRecordDt> naoConRecords,
                                    String dateFrom, String dateTo, List<String> years, List<String> iins) {
         boolean isSummaryMode = years == null || years.isEmpty();
-        List<RecordDt> allRecords = Stream.concat(
-                        informationRecords == null ? Stream.empty() : informationRecords.stream(),
-                        esfInformationRecords == null ? Stream.empty() : esfInformationRecords.stream()
+        List<RecordDt> allRecords = Stream.of(
+                        informationRecords == null ? Collections.<RecordDt>emptyList() : informationRecords,
+                        esfInformationRecords == null ? Collections.<RecordDt>emptyList() : esfInformationRecords,
+                        naoConRecords == null ? Collections.<RecordDt>emptyList() : naoConRecords
                 )
+                .flatMap(List::stream)
                 .filter(Objects::nonNull)
                 .filter(record -> record.getDate() != null && record.getOper() != null)
                 .filter(record -> isSummaryMode || years.contains(String.valueOf(record.getDate().getYear())))
@@ -479,22 +532,22 @@ public class Analyzer {
         if (deduplicatedRecords.isEmpty()) {
             log.warn("No records provided for date range {} to {}, years: {}", dateFrom, dateTo, years);
             return isSummaryMode
-                    ? OverallActive.builder().dateFrom(dateFrom).dateTo(dateTo).selectedYears(years).recordsByOper(new HashMap<>()).build()
-                    : ActiveWithRecords.builder().dateFrom(dateFrom).dateTo(dateTo).selectedYears(years).recordsByOper(new HashMap<>()).build();
+                    ? OverallActive.builder().dateFrom(dateFrom).dateTo(dateTo).selectedYears(years).recordsByOper(new ArrayList<>()).build()
+                    : ActiveWithRecords.builder().dateFrom(dateFrom).dateTo(dateTo).selectedYears(years).recordsByOper(new ArrayList<>()).build();
         }
         log.info("AFTER DEDUPLICATION: {}", deduplicatedRecords.size());
 
-        Map<String, List<RecordDt>> recordsByOper = groupRecordsByOper(deduplicatedRecords);
+        List<RecordDt> formattedRecords = formatRecords(deduplicatedRecords);
 
         if (isSummaryMode) {
+            Map<String, List<RecordDt>> recordsByOper = groupRecordsByOper(formattedRecords);
             return buildOverallActive(recordsByOper, dateFrom, dateTo, years, iins);
         } else {
-            Map<String, List<RecordDt>> formattedRecords = formatRecordsByOper(recordsByOper);
             return ActiveWithRecords.builder()
                     .dateFrom(dateFrom)
                     .dateTo(dateTo)
                     .selectedYears(years)
-                    .recordsByOper(formattedRecords)
+                    .recordsByOper(new ArrayList<>(formattedRecords))
                     .build();
         }
     }
@@ -537,8 +590,9 @@ public class Analyzer {
 
         boolean sameOrCloseDate = isDateWithinTwoDays(record1.getDate(), record2.getDate());
 
-        return sameIin && sameSumm  && sameAktyvy && sameOrCloseDate;
+        return sameIin && sameSumm && sameAktyvy && sameOrCloseDate;
     }
+
     private boolean isSameAktyvy(RecordDt record1, RecordDt record2) {
         String aktyvy1 = getAktyvyValue(record1);
         String aktyvy2 = getAktyvyValue(record2);
@@ -546,6 +600,7 @@ public class Analyzer {
 
         return Objects.equals(aktyvy1, aktyvy2);
     }
+
     private String getAktyvyValue(RecordDt record) {
         if (record instanceof InformationRecordDt infoRecord) {
             return infoRecord.getAktivy();
@@ -573,7 +628,8 @@ public class Analyzer {
         if (record1 instanceof InformationRecordDt info && record2 instanceof ESFInformationRecordDt esf) {
             return Objects.equals(esf.getIin_bin(), info.getIin_bin()) &&
                     Objects.equals(esf.getIin_bin_pokup(), info.getIin_bin()) &&
-                    Objects.equals(esf.getIin_bin_prod(), info.getIin_bin());        }
+                    Objects.equals(esf.getIin_bin_prod(), info.getIin_bin());
+        }
 
         return Objects.equals(record1.getIin_bin(), record2.getIin_bin());
     }
@@ -603,7 +659,7 @@ public class Analyzer {
 
     private OverallActive buildOverallActive(Map<String, List<RecordDt>> recordsByOper,
                                              String dateFrom, String dateTo, List<String> years, List<String> iins) {
-        Map<String, List<RecordGroup>> aggregatedRecords = new HashMap<>();
+        List<RecordGroup> aggregatedRecords = new ArrayList<>();
         Map<String, String> iinToFio = buildIinToFioMapForActive(recordsByOper, iins);
 
         recordsByOper.forEach((oper, records) -> {
@@ -621,7 +677,7 @@ public class Analyzer {
                     .map(entry -> buildActiveRecordGroup(entry, oper, iinToFio, iins, records))
                     .toList();
 
-            aggregatedRecords.put(oper, new ArrayList<>(recordGroups));
+            aggregatedRecords.addAll(new ArrayList<>(recordGroups));
         });
 
         return OverallActive.builder()
@@ -632,7 +688,8 @@ public class Analyzer {
                 .build();
     }
 
-    private Map<String, String> buildIinToFioMapForActive(Map<String, List<RecordDt>> recordsByOper, List<String> iins) {
+    private Map<String, String> buildIinToFioMapForActive
+            (Map<String, List<RecordDt>> recordsByOper, List<String> iins) {
         Set<String> uniqueIins = recordsByOper.values().stream()
                 .flatMap(List::stream)
                 .map(RecordDt::getIin_bin)
@@ -677,41 +734,74 @@ public class Analyzer {
                 .build();
     }
 
-    private Map<String, List<RecordDt>> formatRecordsByOper(Map<String, List<RecordDt>> recordsByOper) {
-        return recordsByOper.entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        entry -> entry.getValue().stream()
-                                .map(record -> {
-                                    if (record instanceof InformationRecordDt info) {
-                                        return InformationRecordDt.builder()
-                                                .iin_bin(info.getIin_bin())
-                                                .date(info.getDate())
-                                                .aktivy(info.getAktivy())
-                                                .database(info.getDatabase())
-                                                .oper(info.getOper())
-                                                .dopinfo(info.getDopinfo())
-                                                .summ(info.getSumm() != null ? numberConverter.formatNumber(info.getSumm()) : null)
-                                                .build();
-                                    } else if (record instanceof ESFInformationRecordDt esf) {
-                                        return ESFInformationRecordDt.builder()
-                                                .iin_bin(esf.getIin_bin())
-                                                .iin_bin_pokup(esf.getIin_bin_pokup())
-                                                .iin_bin_prod(esf.getIin_bin_prod())
-                                                .date(esf.getDate())
-                                                .aktivy(esf.getAktivy())
-                                                .database(esf.getDatabase())
-                                                .oper(esf.getOper())
-                                                .dopinfo(esf.getDopinfo())
-                                                .num_doc(esf.getNum_doc())
-                                                .summ(esf.getSumm() != null ? numberConverter.formatNumber(esf.getSumm()) : null)
-                                                .build();
-                                    }
-                                    return record;
-                                })
-                                .collect(Collectors.toList())
-                ));
+    private List<RecordDt> formatRecords(List<RecordDt> records) {
+        return records.stream()
+                .map(record -> {
+                    if (record instanceof InformationRecordDt info) {
+                        try {
+                            return InformationRecordDt.builder()
+                                    .iin_bin(info.getIin_bin())
+                                    .name(portretService.getIinInfo(info.getIin_bin()).getName())
+                                    .date(info.getDate())
+                                    .aktivy(info.getAktivy())
+                                    .database(info.getDatabase())
+                                    .oper(info.getOper())
+                                    .dopinfo(info.getDopinfo())
+                                    .summ(info.getSumm() != null ? numberConverter.formatNumber(info.getSumm()) : null)
+                                    .build();
+                        } catch (IOException e) {
+                            log.error("Error formatting InformationRecordDt: {}", e.getMessage());
+                        }
+                    } else if (record instanceof ESFInformationRecordDt esf) {
+                        try {
+                            return ESFInformationRecordDt.builder()
+                                    .iin_bin(esf.getIin_bin())
+                                    .name(portretService.getIinInfo(esf.getIin_bin()).getName())
+                                    .iin_bin_pokup(esf.getIin_bin_pokup())
+                                    .iin_bin_prod(esf.getIin_bin_prod())
+                                    .date(esf.getDate())
+                                    .aktivy(esf.getAktivy())
+                                    .database(esf.getDatabase())
+                                    .oper(esf.getOper())
+                                    .dopinfo(esf.getDopinfo())
+                                    .num_doc(esf.getNum_doc())
+                                    .summ(esf.getSumm() != null ? numberConverter.formatNumber(esf.getSumm()) : null)
+                                    .build();
+                        } catch (IOException e) {
+                            log.error("Error formatting ESFInformationRecordDt: {}", e.getMessage());
+                        }
+                    }else if (record instanceof NaoConRecordDt nao) {
+                        try {
+                            return NaoConRecordDt.builder()
+                                    .iin_bin(nao.getIin_bin())
+                                    .name(portretService.getIinInfo(nao.getIin_bin()).getName())
+                                    .iin_bin_pokup(nao.getIin_bin_pokup())
+                                    .iin_bin_prod(nao.getIin_bin_prod())
+                                    .date(nao.getDate())
+                                    .aktivy(nao.getAktivy())
+                                    .database(nao.getDatabase())
+                                    .oper(nao.getOper())
+                                    .dopinfo(nao.getDopinfo())
+                                    .num_doc(nao.getNum_doc())
+                                    .vid_ned(nao.getVid_ned())
+                                    .podrod_vid_ned(nao.getPodrod_vid_ned())
+                                    .kd_fixed(nao.getKd_fixed())
+                                    .rka(nao.getRka())
+                                    .address(nao.getAddress())
+                                    .obshaya_ploshad(nao.getObshaya_ploshad())
+                                    .summ(nao.getSumm() != null ? numberConverter.formatNumber(nao.getSumm()) : null)
+                                    .build();
+                        } catch (IOException e) {
+                            log.error("Error formatting ESFInformationRecordDt: {}", e.getMessage());
+                        }
+                    }
+
+                    return record;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
+
     public String extractTypeFromDopinfo(String aktivy, String dopinfo) {
         if (dopinfo == null || dopinfo.isEmpty() || aktivy == null) {
             return null;
@@ -746,12 +836,13 @@ public class Analyzer {
 
         return type.isEmpty() ? Optional.empty() : Optional.of(type);
     }
+
     public double calculateTotalIncomeByIIN(String iin, String dateFrom, String dateTo) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
         Set<String> targetSources = Dictionary.getIncomeMethodsBySource().keySet();
 
         processRecords(Collections.singletonList(iin), dateFrom, dateTo, null, targetSources, null, null,
-                allInfoRecords, null, false);
+                allInfoRecords, null, null, false);
 
         return allInfoRecords.stream()
                 .filter(Objects::nonNull)
@@ -761,11 +852,11 @@ public class Analyzer {
     }
 
     public YearlyRecordCounts getYearlyRecordCounts(String iin, String dateFrom, String dateTo,
-                                                    List<String> sources, List<String> types,
+                                                    List<String> sources, List<String> types, List<String> vids,
                                                     List<String> iins, boolean isActive) {
         List<YearlyCount> counts = isActive
-                ? calculateActiveYearlyCounts(iin, dateFrom, dateTo, sources, types, iins)
-                : calculateIncomeYearlyCounts(iin, dateFrom, dateTo, sources, iins);
+                ? calculateActiveYearlyCounts(iin, dateFrom, dateTo, sources, types, vids, iins)
+                : calculateIncomeYearlyCounts(iin, dateFrom, dateTo, sources, vids, iins);
 
         return YearlyRecordCounts.builder()
                 .counts(counts)
@@ -773,30 +864,37 @@ public class Analyzer {
     }
 
     private List<YearlyCount> calculateActiveYearlyCounts(String iin, String dateFrom, String dateTo,
-                                                          List<String> sources, List<String> types, List<String> iins) {
+                                                          List<String> sources, List<String> types,  List<String> vids, List<String> iins) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
         List<ESFInformationRecordDt> allEsfRecords = new ArrayList<>();
+        List<NaoConRecordDt> allNaoConRecords = new ArrayList<>();
 
         List<String> involvedIins = buildInvolvedIins(iin, iins);
         Set<String> targetSources = sources != null && !sources.isEmpty()
                 ? new HashSet<>(sources)
                 : Dictionary.getActiveMethodsBySource().keySet();
 
-        processRecords(involvedIins, dateFrom, dateTo, null, targetSources, null, types, allInfoRecords, allEsfRecords, true);
+        processRecords(involvedIins, dateFrom, dateTo, null, targetSources, vids, types,
+                allInfoRecords, allEsfRecords, allNaoConRecords, true);
 
-        List<RecordDt> allActiveRecords = Stream.concat(
-                        keepDistinctInfo(allInfoRecords).stream(),
-                        keepDistinctEsf(allEsfRecords).stream()
+        List<RecordDt> allRecords = Stream.of(
+                        allInfoRecords == null ? Collections.<RecordDt>emptyList() : allInfoRecords,
+                        allEsfRecords == null ? Collections.<RecordDt>emptyList() : allEsfRecords,
+                        allNaoConRecords == null ? Collections.<RecordDt>emptyList() : allNaoConRecords
                 )
+                .flatMap(List::stream)
                 .filter(Objects::nonNull)
                 .filter(record -> record.getDate() != null)
+                .distinct()
                 .collect(Collectors.toList());
-
-        return calculateYearlyCounts(allActiveRecords);
+        log.info("ALL RECORDS SIZE: {}", allRecords.size());
+        List<RecordDt> deduplicated = deduplicateRecords(allRecords);
+        log.info("ALL DEDUPLICATED SIZE: {}", deduplicated.size());
+        return calculateYearlyCounts(deduplicated);
     }
 
     private List<YearlyCount> calculateIncomeYearlyCounts(String iin, String dateFrom, String dateTo,
-                                                          List<String> sources, List<String> iins) {
+                                                          List<String> sources, List<String> vids, List<String> iins) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
 
         List<String> involvedIins = buildInvolvedIins(iin, iins);
@@ -804,9 +902,18 @@ public class Analyzer {
                 ? new HashSet<>(sources)
                 : Dictionary.getIncomeMethodsBySource().keySet();
 
-        processRecords(involvedIins, dateFrom, dateTo, null, targetSources, null, null, allInfoRecords, null, false);
+        processRecords(involvedIins, dateFrom, dateTo, null, targetSources, vids, null,
+                allInfoRecords, null, null, false);
 
-        return calculateYearlyCounts(keepDistinctInfo(allInfoRecords));
+        List<RecordDt> allRecords = Stream.of(
+                        allInfoRecords == null ? Collections.<RecordDt>emptyList() : allInfoRecords
+                )
+                .flatMap(List::stream)
+                .filter(Objects::nonNull)
+                .filter(record -> record.getDate() != null)
+                .distinct()
+                .collect(Collectors.toList());
+        return calculateYearlyCounts(deduplicateRecords(allRecords));
     }
 
     private List<String> buildInvolvedIins(String iin, List<String> iins) {
@@ -824,33 +931,42 @@ public class Analyzer {
                 .filter(record -> record.getDate() != null)
                 .collect(Collectors.groupingBy(
                         record -> String.valueOf(record.getDate().getYear()),
-                        Collectors.teeing(
-                                Collectors.counting(),
-                                Collectors.summingDouble(record -> parseDoubleOrZero(record.getSumm(), record.getIin_bin(), null)),
-                                (count, sum) -> YearlyCount.builder()
-                                        .year(String.valueOf(count))
-                                        .count(count.intValue())
-                                        .summ(numberConverter.formatNumber(sum))
+                        Collector.of(
+                                () -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO},
+                                (acc, record) -> {
+                                    acc[0] = acc[0].add(BigDecimal.ONE);
+                                    BigDecimal val = numberConverter.parseBigDecimalOrZero(record.getSumm());
+                                    acc[1] = acc[1].add(val);
+                                },
+                                (acc1, acc2) -> {
+                                    acc1[0] = acc1[0].add(acc2[0]);
+                                    acc1[1] = acc1[1].add(acc2[1]);
+                                    return acc1;
+                                },
+                                acc -> YearlyCount.builder()
+                                        .year(null)
+                                        .count(acc[0].intValue())
+                                        .summ(numberConverter.formatNumber(acc[1].toPlainString()))
                                         .build()
                         )
                 ))
                 .entrySet().stream()
-                .map(entry -> YearlyCount.builder()
-                        .year(entry.getKey())
-                        .count(entry.getValue().getCount())
-                        .summ(entry.getValue().getSumm())
-                        .build()
-                )
+                .map(entry -> {
+                    YearlyCount yc = entry.getValue();
+                    yc.setYear(entry.getKey());
+                    return yc;
+                })
                 .sorted(Comparator.comparing(YearlyCount::getYear))
                 .collect(Collectors.toList());
     }
 
     public ActiveResponse getAllActiveCountsOfPersonsByDates(String iin, String dateFrom, String dateTo,
-                                                        List<String> years, List<String> vids,
-                                                        List<String> types, List<String> sources,
-                                                        List<String> iins, String button) {
+                                                             List<String> years, List<String> vids,
+                                                             List<String> types, List<String> sources,
+                                                             List<String> iins, String button) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
         List<ESFInformationRecordDt> allEsfRecords = new ArrayList<>();
+        List<NaoConRecordDt> allNaoRecords = new ArrayList<>();
         Map<String, List<String>> filteredIinToRelation = populateIinToRelation(iin, iins);
 
         List<String> involvedIins = new ArrayList<>(iins != null ? iins.size() + 1 : 1);
@@ -860,43 +976,76 @@ public class Analyzer {
         Set<String> targetSources = sources != null && !sources.isEmpty()
                 ? new HashSet<>(sources)
                 : Dictionary.getActiveMethodsBySource().keySet();
+
         switch (button) {
-            case "Все" -> processRecords(involvedIins, dateFrom, dateTo, years, targetSources, vids, types,
-                    allInfoRecords, allEsfRecords, true);
+            case "Все" -> {
+                // Process records and group by database
+                Map<String, List<InformationRecordDt>> infoRecordsByDatabase;
+                Map<String, List<ESFInformationRecordDt>> esfRecordsByDatabase;
+
+                processRecords(involvedIins, dateFrom, dateTo, years, targetSources, vids, types,
+                        allInfoRecords, allEsfRecords, allNaoRecords, true);
+
+                // Group InformationRecordDt by database
+                infoRecordsByDatabase = allInfoRecords.stream()
+                        .filter(record -> record.getDatabase() != null)
+                        .collect(Collectors.groupingBy(InformationRecordDt::getDatabase));
+
+                // Group ESFInformationRecordDt by database
+                esfRecordsByDatabase = allEsfRecords.stream()
+                        .filter(record -> record.getDatabase() != null)
+                        .collect(Collectors.groupingBy(ESFInformationRecordDt::getDatabase));
+
+                // Clear original lists and add back records in database-grouped order
+                allInfoRecords.clear();
+                allEsfRecords.clear();
+
+                // Sort databases alphabetically to ensure consistent order
+                infoRecordsByDatabase.entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .forEach(entry -> allInfoRecords.addAll(entry.getValue()));
+
+                esfRecordsByDatabase.entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .forEach(entry -> allEsfRecords.addAll(entry.getValue()));
+            }
             case "Текущий" -> {
                 for (String currentIin : involvedIins) {
                     try {
-                        List<ESFInformationRecordDt> naoConRecords = naoConService.getNaoConHouse(currentIin, dateFrom, dateTo);
-                        synchronized (allEsfRecords) {
-                            allEsfRecords.addAll(naoConRecords);
-                        }
-
+                        List<NaoConRecordDt> naoConRecords = naoConService.getNaoConHouse(currentIin, dateFrom, dateTo);
                         Set<String> kdsWithSale = new HashSet<>();
-                        Map<String, ESFInformationRecordDt> latestRecordsByKd = new HashMap<>();
-                        for (ESFInformationRecordDt record : naoConRecords) {
-                            String kd = extractKdFromDopinfo(record.getDopinfo());
+                        Map<String, NaoConRecordDt> latestRecordsByKd = new HashMap<>();
+
+                        for (NaoConRecordDt record : naoConRecords) {
+                            String kd = record.getKd_fixed();
                             if (kd != null) {
                                 if ("Реализация".equals(record.getOper())) {
                                     kdsWithSale.add(kd);
                                 }
                                 latestRecordsByKd.compute(kd, (key, oldRecord) ->
-                                        oldRecord == null || isLaterDate(record.getDate().toString(),
-                                                oldRecord.getDate().toString()) ? record : oldRecord);
+                                        oldRecord == null || isLaterDate(record.getDate().toString(), oldRecord.getDate().toString())
+                                                ? record : oldRecord);
                             }
                         }
+                        log.info("LAST RECORDS: {}", latestRecordsByKd);
 
-                        List<ESFInformationRecordDt> filteredRecords = latestRecordsByKd.values().stream()
+                        List<NaoConRecordDt> filteredRecords = latestRecordsByKd.values().stream()
                                 .filter(record -> {
-                                    String kd = extractKdFromDopinfo(record.getDopinfo());
-                                    return kd != null && !kdsWithSale.contains(kd) && "Приобретение".equals(record.getOper());
+                                    String kd = record.getKd_fixed();
+                                    return kd != null && !kdsWithSale.contains(kd) &&
+                                            ("Наличие".equals(record.getOper()) || "Приобретение".equals(record.getOper()));
                                 })
+                                .collect(Collectors.groupingBy(NaoConRecordDt::getDatabase))
+                                .entrySet().stream()
+                                .sorted(Map.Entry.comparingByKey())
+                                .flatMap(entry -> entry.getValue().stream())
                                 .toList();
 
-                        synchronized (allEsfRecords) {
-                            allEsfRecords.clear();
-                            allEsfRecords.addAll(filteredRecords);
+                        synchronized (allNaoRecords) {
+                            allNaoRecords.clear();
+                            allNaoRecords.addAll(filteredRecords);
                         }
-
+                        log.debug("Filtered {} NaoCon records for IIN {} in 'Текущий' mode", filteredRecords.size(), currentIin);
                     } catch (IOException e) {
                         log.error("Failed to fetch NAO CON records for IIN {}: {}", currentIin, e.getMessage());
                     }
@@ -905,10 +1054,45 @@ public class Analyzer {
             case "Исторический" -> {
                 for (String currentIin : involvedIins) {
                     try {
-                        List<ESFInformationRecordDt> naoConRecords = naoConService.getNaoConHouse(currentIin, dateFrom, dateTo);
-                        synchronized (allEsfRecords) {
-                            allEsfRecords.addAll(naoConRecords);
+                        List<NaoConRecordDt> naoConRecords = naoConService.getNaoConHouse(currentIin, dateFrom, dateTo);
+
+                        Map<String, List<NaoConRecordDt>> recordsByKd = naoConRecords.stream()
+                                .filter(record -> record.getKd_fixed() != null)
+                                .collect(Collectors.groupingBy(NaoConRecordDt::getKd_fixed));
+
+                        List<NaoConRecordDt> pairedRecords = new ArrayList<>();
+
+                        for (Map.Entry<String, List<NaoConRecordDt>> entry : recordsByKd.entrySet()) {
+                            List<NaoConRecordDt> kdRecords = entry.getValue();
+
+                            boolean hasBuy = kdRecords.stream()
+                                    .anyMatch(r -> "Приобретение".equals(r.getOper()));
+                            boolean hasSell = kdRecords.stream()
+                                    .anyMatch(r -> "Реализация".equals(r.getOper()));
+
+                            kdRecords.sort(Comparator.comparing(r -> r.getDate().toString()));
+
+                            if (hasBuy && hasSell) {
+                                pairedRecords.addAll(kdRecords);
+                            }
+                            else if (!hasBuy && hasSell) {
+                                pairedRecords.addAll(kdRecords);
+                            }
                         }
+
+                        Map<String, List<NaoConRecordDt>> naoRecordsByDatabase = pairedRecords.stream()
+                                .filter(record -> record.getDatabase() != null)
+                                .collect(Collectors.groupingBy(NaoConRecordDt::getDatabase));
+
+                        synchronized (allNaoRecords) {
+                            allNaoRecords.clear();
+                            naoRecordsByDatabase.entrySet().stream()
+                                    .sorted(Map.Entry.comparingByKey())
+                                    .forEach(entry -> allNaoRecords.addAll(entry.getValue()));
+                        }
+
+                        log.debug("Added {} paired NaoCon records for IIN {} in 'Исторический' mode", pairedRecords.size(), currentIin);
+
                     } catch (IOException e) {
                         log.error("Failed to fetch NAO CON records for IIN {}: {}", currentIin, e.getMessage());
                     }
@@ -917,11 +1101,12 @@ public class Analyzer {
         }
 
         ActiveResponse activeResult = toActiveCount(keepDistinctInfo(allInfoRecords),
-                keepDistinctEsf(allEsfRecords),
+                keepDistinctEsf(allEsfRecords), keepDistinctNao(allNaoRecords),
                 dateFrom, dateTo, years, involvedIins);
         setIinToRelation(activeResult, filteredIinToRelation);
         return activeResult;
     }
+
     private boolean isLaterDate(String date1, String date2) {
         if (date1 == null || date2 == null) return date1 != null;
         try {
@@ -933,6 +1118,7 @@ public class Analyzer {
             return false;
         }
     }
+
     private String extractKdFromDopinfo(String dopinfo) {
         if (dopinfo == null || dopinfo.isEmpty()) {
             return null;
@@ -945,25 +1131,34 @@ public class Analyzer {
         }
         return null;
     }
+
     public ActiveResponse toActiveCount(List<InformationRecordDt> informationRecords,
                                         List<ESFInformationRecordDt> esfInformationRecords,
+                                        List<NaoConRecordDt> naoConRecordDs,
                                         String dateFrom, String dateTo, List<String> years, List<String> iins) {
         boolean isSummaryMode = years == null || years.isEmpty();
-        List<RecordDt> allRecords = Stream.concat(
-                        informationRecords == null ? Stream.empty() : informationRecords.stream(),
-                        esfInformationRecords == null ? Stream.empty() : esfInformationRecords.stream()
+        List<RecordDt> allRecords = Stream.of(
+                        informationRecords == null ? Collections.<RecordDt>emptyList() : informationRecords,
+                        esfInformationRecords == null ? Collections.<RecordDt>emptyList() : esfInformationRecords,
+                        naoConRecordDs == null ? Collections.<RecordDt>emptyList() : naoConRecordDs
                 )
+                .flatMap(List::stream)
                 .filter(Objects::nonNull)
                 .filter(record -> record.getDate() != null && record.getOper() != null)
                 .filter(record -> isSummaryMode || years.contains(String.valueOf(record.getDate().getYear())))
                 .sorted(Comparator.comparing(RecordDt::getDate, Comparator.nullsLast(Comparator.naturalOrder())))
                 .distinct()
-                .toList();
+                .collect(Collectors.toList());
 
         log.info("ALL RECORDS SIZE: {}", allRecords.size());
 
         List<RecordDt> formattedRecords = allRecords.stream()
-                .peek(record -> record.setSumm(numberConverter.formatNumber(record.getSumm())))
+                .peek(record -> {
+                    if (record instanceof NaoConRecordDt naoRecord) {
+                        naoRecord.setDopinfo(null);
+                    }
+                    record.setSumm(numberConverter.formatNumber(record.getSumm()));
+                })
                 .toList();
 
         List<RecordDt> deduplicatedRecords = deduplicateRecords(formattedRecords);
@@ -1000,6 +1195,7 @@ public class Analyzer {
                             .records(entry.getValue())
                             .build();
                 })
+                .sorted(Comparator.comparing(ActiveCountGroup::getDatabase))
                 .collect(Collectors.toList());
 
         return ActiveCounts.builder()
@@ -1009,6 +1205,7 @@ public class Analyzer {
                 .aktivyTypeCounts(aktivyTypeCounts)
                 .build();
     }
+
     public static List<InformationRecordDt> keepDistinctInfo(List<InformationRecordDt> informationRecords) {
         return informationRecords.stream().distinct().collect(Collectors.toList());
     }
@@ -1016,6 +1213,10 @@ public class Analyzer {
     public static List<ESFInformationRecordDt> keepDistinctEsf(List<ESFInformationRecordDt> esfInformationRecords) {
         return esfInformationRecords.stream().distinct().collect(Collectors.toList());
     }
+    public static List<NaoConRecordDt> keepDistinctNao(List<NaoConRecordDt> naoConRecordDs) {
+        return naoConRecordDs.stream().distinct().collect(Collectors.toList());
+    }
+
     public static List<RelationRecord> keepDistinctRelations(List<RelationRecord> relationRecords) {
         return relationRecords.stream().distinct().collect(Collectors.toList());
     }

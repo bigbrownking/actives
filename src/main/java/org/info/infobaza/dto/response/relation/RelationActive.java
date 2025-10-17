@@ -6,6 +6,7 @@ import lombok.ToString;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Builder
@@ -16,6 +17,7 @@ public class RelationActive {
     private String iin;
     private String actives;
     private String incomes;
+    private Map<String, String> dopinfo;
     private List<SupervisorRecord> head;
     private boolean isNominal;
     private int level;

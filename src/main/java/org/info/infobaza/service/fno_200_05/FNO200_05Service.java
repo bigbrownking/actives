@@ -35,5 +35,4 @@ public class FNO200_05Service implements InformationalService {
         String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.FNO200_05_Доход_по_данным_ФНО.getPath(), iin, dateFrom, dateTo);
         return jdbcTemplate.query(sql, mapper::mapRowToIncome);
     }
-
 }

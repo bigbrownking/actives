@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.service.InformationalService;
 import org.info.infobaza.service.ServiceMetadata;
+import org.info.infobaza.util.convert.IinChecker;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.util.convert.SQLFileUtil;
@@ -12,6 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -22,6 +24,7 @@ public class FNOService implements InformationalService {
     private final JdbcTemplate jdbcTemplate;
     private final SQLFileUtil sqlFileUtil;
     private final Mapper mapper;
+    private final IinChecker iinChecker;
 
 
     @ServiceMetadata(
@@ -32,6 +35,9 @@ public class FNOService implements InformationalService {
     public List<InformationRecordDt> getFNOIncomeIP(String iin, String dateFrom, String dateTo) throws IOException {
         if (iin == null || iin.trim().isEmpty()) {
             throw new IllegalArgumentException("IIN cannot be null or empty");
+        }
+        if(iinChecker.isUl(iin)){
+            return new ArrayList<>();
         }
         log.info("Fetching FNO income ip for IIN: {}", iin);
         String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.FNO_Доход_ИП.getPath(), iin, dateFrom, dateTo);
@@ -47,6 +53,9 @@ public class FNOService implements InformationalService {
     public List<InformationRecordDt> getFNOSGD_UL(String iin, String dateFrom, String dateTo) throws IOException {
         if (iin == null || iin.trim().isEmpty()) {
             throw new IllegalArgumentException("IIN cannot be null or empty");
+        }
+        if(!iinChecker.isUl(iin)){
+            return new ArrayList<>();
         }
         log.info("Fetching FNO sgd ul for IIN: {}", iin);
         String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.FNO_СГД_ЮЛ.getPath(), iin, dateFrom, dateTo);

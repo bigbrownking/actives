@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 public interface RecordDt {
     String getIin_bin();
+    String getName();
     LocalDate getDate();
     String getDatabase();
     String getOper();
@@ -12,6 +13,7 @@ public interface RecordDt {
     String getAktivy();
 
     void setIin_bin(String iin);
+    void setName(String name);
     void setDate(LocalDate localDate);
     void setDatabase(String database);
     void setOper(String oper);

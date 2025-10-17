@@ -71,6 +71,7 @@ public class PortretService {
         // Fetch portret data for status
         List<String> portrets = fetchPortrets(iin);
         List<String> status = determineStatus(age, portrets);
+        boolean turnover = fetchTurnover(iin);
 
         return new Person(
                 fullName,
@@ -78,6 +79,7 @@ public class PortretService {
                 iin,
                 photo,
                 status,
+                turnover,
                 isNominal(iin)
         );
     }
@@ -133,23 +135,31 @@ public class PortretService {
         // Step 3: Try dossier UL
         try {
             String jsonResponse = getDossierULContent(iin);
-            JsonNode rootNode = new ObjectMapper().readTree(jsonResponse);
-            JsonNode companyNode = rootNode.get(0);
-            if (companyNode != null) {
-                String companyName = companyNode.path("fullName").asText(null);
-                if (companyName != null && !companyName.trim().isEmpty()) {
-                    result.setFullName(companyName.trim());
-                    result.setType("COMPANY");
-                    log.info("Fetched company name '{}' from dossier UL for IIN: {}", companyName, iin);
-                    return result;
+
+            if (jsonResponse != null && !jsonResponse.trim().isEmpty()) {
+                JsonNode rootNode = new ObjectMapper().readTree(jsonResponse);
+                JsonNode companyNode = rootNode.get(0);
+
+                if (companyNode != null) {
+                    String companyName = companyNode.path("fullName").asText(null);
+                    if (companyName != null && !companyName.trim().isEmpty()) {
+                        result.setFullName(companyName.trim());
+                        result.setType("COMPANY");
+                        log.info("Fetched company name '{}' from dossier UL for IIN: {}", companyName, iin);
+                        return result;
+                    }
+                    log.debug("Company found but fullName is empty or null for IIN: {}", iin);
+                } else {
+                    log.debug("No company record found in JSON array for IIN: {}", iin);
                 }
-                log.debug("Company found but fullName is empty or null for IIN: {}", iin);
             } else {
-                log.debug("No company record found in JSON array for IIN: {}", iin);
+                log.debug("getDossierULContent returned null or empty for IIN: {}", iin);
             }
+
         } catch (Exception e) {
-            log.error("Error fetching company dossier for IIN: {}", iin, e);
+            log.error("Error fetching company dossier for IIN {}: {}", iin, e.getMessage());
         }
+
 
         // Step 4: Try fetchFIO_UL
         String companyName = fetchFIO_UL(iin);
@@ -176,6 +186,17 @@ public class PortretService {
             return Collections.emptyList();
         }
     }
+    private boolean fetchTurnover(String iin) {
+        try {
+            String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Turnover_turnover.getPath(), iin);
+            List<String> turnovers = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("iin_bin"));
+            return turnovers.stream().anyMatch(x -> x.equals(iin));
+        } catch (Exception e) {
+            log.error("Error fetching turnover data for IIN: {}", iin, e);
+            return false;
+        }
+    }
+
 
     private List<String> determineStatus(Age age, List<String> portrets) {
         if (age != null) {
@@ -240,12 +261,12 @@ public class PortretService {
 
     private String getDossierFLContent(String iin) {
         validateIin(iin);
-        return fetchDossierContent(iin, "https://192.168.122.47/api/api/pandora/dossier/get-fl-by-iin", "IIN");
+        return fetchDossierContent(iin, "http://192.168.122.47:8082/api/pandora/dossier/get-fl-by-iin", "IIN");
     }
 
     private String getDossierULContent(String bin) {
         validateIin(bin);
-        return fetchDossierContent(bin, "https://192.168.122.47/api/api/pandora/dossier/ul/find-by-bin", "BIN");
+        return fetchDossierContent(bin, "http://192.168.122.47:8082/api/pandora/dossier/ul/find-by-bin", "BIN");
     }
 
     private String fetchDossierContent(String identifier, String dossierUrl, String identifierType) {

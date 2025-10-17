@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import org.info.infobaza.dto.response.person.Age;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
@@ -59,4 +60,13 @@ public class NumberConverter {
                 .status(status)
                 .build();
     }
+    public BigDecimal parseBigDecimalOrZero(String summ) {
+        try {
+            if (summ == null || summ.trim().isEmpty()) return BigDecimal.ZERO;
+            return new BigDecimal(summ.trim());
+        } catch (NumberFormatException e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
 }

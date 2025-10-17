@@ -3,6 +3,7 @@ package org.info.infobaza.service.nao_con;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
+import org.info.infobaza.model.info.active_income.NaoConRecordDt;
 import org.info.infobaza.service.InformationalService;
 import org.info.infobaza.service.ServiceMetadata;
 import org.info.infobaza.util.convert.Mapper;
@@ -30,12 +31,12 @@ public class NaoConService implements InformationalService {
             type = {"Реализация", "Приобретение"},
             isActive = true
     )
-    public List<ESFInformationRecordDt> getNaoConHouse(String iin, String dateFrom, String dateTo) throws IOException {
+    public List<NaoConRecordDt> getNaoConHouse(String iin, String dateFrom, String dateTo) throws IOException {
         if (iin == null || iin.trim().isEmpty()) {
             throw new IllegalArgumentException("IIN cannot be null or empty");
         }
         log.info("Fetching nao con house for IIN: {}", iin);
         String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.НАО_ЦОН_Недвижимое_имущество.getPath(), iin, dateFrom, dateTo);
-        return jdbcTemplate.query(sql, mapper::mapRowToESF);
+        return jdbcTemplate.query(sql, mapper::mapRowToNaoCon);
     }
 }

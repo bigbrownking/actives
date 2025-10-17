@@ -117,14 +117,14 @@ public class ENPFService implements InformationalService {
             }
 
             String formattedStartDate = dateUtil.formatOutput(periodStartDate);
-            String formattedEndDate = dateUtil.formatOutput(periodEndDate);
+            String formattedEndDate = (i == sortedWorkplaces.size() - 1) ? "по н.в." : dateUtil.formatOutput(periodEndDate);
 
             double maxSalary = workplaceRecords.stream()
                     .map(InformationRecordDt::getSumm)
                     .filter(Objects::nonNull)
                     .mapToDouble(amount -> {
                         try {
-                            return Double.parseDouble(amount);
+                            return Double.parseDouble(amount) * 10;
                         } catch (NumberFormatException e) {
                             log.warn("Invalid AMOUNT format: {}, defaulting to 0", amount);
                             return 0;
@@ -138,20 +138,33 @@ public class ENPFService implements InformationalService {
                     .max(Comparator.comparing(InformationRecordDt::getDate))
                     .map(record -> {
                         try {
-                            return Double.parseDouble(record.getSumm());
+                            return Double.parseDouble(record.getSumm()) * 10;
                         } catch (NumberFormatException e) {
                             log.warn("Invalid AMOUNT format for last record: {}, defaulting to 0", record.getSumm());
                             return 0;
                         }
                     })
                     .orElse(0);
+            double sumSalary = workplaceRecords.stream()
+                    .map(InformationRecordDt::getSumm)
+                    .filter(Objects::nonNull)
+                    .mapToDouble(amount -> {
+                        try {
+                            return Double.parseDouble(amount) * 10;
+                        } catch (NumberFormatException e) {
+                            log.warn("Invalid AMOUNT format: {}, defaulting to 0", amount);
+                            return 0;
+                        }
+                    })
+                    .sum();
             Pension pension = new Pension(
                     formattedStartDate,
                     formattedEndDate,
                     entry.getValue().get(0).getDopinfo(),
                     entry.getKey(),
-                    maxSalary,
-                    lastSalary
+                    numberConverter.formatNumber(maxSalary),
+                    numberConverter.formatNumber(lastSalary),
+                    numberConverter.formatNumber(sumSalary)
             );
             pensions.add(pension);
         }
@@ -170,7 +183,6 @@ public class ENPFService implements InformationalService {
         try {
             turnoverRecords = jdbcTemplate.query(sql, mapper::mapRowToTurnover);
             turnoverRecords.forEach(record -> {
-                log.info("DATE IS: {}", record.getStartDate());
                 record.setSumm(numberConverter.formatNumber(record.getSumm()));
 
                 record.setStartDate(dateUtil.formatTimeToCustom(record.getStartDate()));
@@ -185,14 +197,48 @@ public class ENPFService implements InformationalService {
                 .filter(record -> record.getBankName() != null)
                 .collect(Collectors.groupingBy(TurnoverRecord::getBankName))
                 .entrySet().stream()
-                .map(entry -> BankTurnoverGroup.builder()
-                        .bankName(entry.getKey())
-                        .count(entry.getValue().size())
-                        .records(entry.getValue())
-                        .build()
-                )
+                .map(entry -> {
+                    List<TurnoverRecord> records = entry.getValue().stream()
+                            .sorted(Comparator.comparing(record -> {
+                                try {
+                                    return Double.parseDouble(record.getSumm().replaceAll("[^0-9.]", ""));
+                                } catch (NumberFormatException e) {
+                                    log.warn("Invalid sum format for record: {}, defaulting to 0", record.getSumm());
+                                    return 0.0;
+                                }
+                            }, Comparator.reverseOrder()))
+                            .collect(Collectors.toList());
+
+                    double totalSum = records.stream()
+                            .mapToDouble(record -> {
+                                try {
+                                    return Double.parseDouble(record.getSumm().replaceAll("[^0-9.]", ""));
+                                } catch (NumberFormatException e) {
+                                    log.warn("Invalid sum format for total: {}, defaulting to 0", record.getSumm());
+                                    return 0.0;
+                                }
+                            })
+                            .sum();
+
+                    return BankTurnoverGroup.builder()
+                            .bankName(entry.getKey())
+                            .count(records.size())
+                            .records(records)
+                            .totalSum(numberConverter.formatNumber(String.valueOf(totalSum)))
+                            .build();
+                })
+                .sorted(Comparator.comparing(group -> {
+                    try {
+                        return Double.parseDouble(group.getTotalSum().replaceAll("[^0-9.]", ""));
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid total sum format for group: {}, defaulting to 0", group.getTotalSum());
+                        return 0.0;
+                    }
+                }, Comparator.reverseOrder()))
                 .collect(Collectors.toList());
     }
+
+
 
     public List<TurnoverRecord> getTurnoverRecords(String iin) throws IOException {
         if (iin == null || iin.trim().isEmpty()) {
@@ -205,7 +251,6 @@ public class ENPFService implements InformationalService {
         try {
             turnoverRecords = jdbcTemplate.query(sql, mapper::mapRowToTurnover);
             turnoverRecords.forEach(record -> {
-                log.info("DATE IS: {}", record.getStartDate());
                 record.setSumm(numberConverter.formatNumber(record.getSumm()));
 
                 record.setStartDate(dateUtil.formatTimeToCustom(record.getStartDate()));

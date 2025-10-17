@@ -32,10 +32,11 @@ public class RelationController {
     @LogRequest
     @PostMapping("/secondary")
     @Cacheable(value = "secondaryRelations", key = "#mainRequest")
-    public ResponseEntity<RelationActiveWithTypes> allSecondaryRelationsOfPerson(@RequestBody MainRequest mainRequest) throws IOException {
-        return ResponseEntity.ok().body(relationService.getSecondaryRelationsOfPerson(
+    public ResponseEntity<?> allSecondaryRelationsOfPerson(@RequestBody MainRequest mainRequest) throws IOException {
+        RelationActiveWithTypes active = relationService.getSecondaryRelationsOfPerson(
                 mainRequest.getIin_bin(),
                 mainRequest.getDateFrom().toString(),
-                mainRequest.getDateTo().toString()));
+                mainRequest.getDateTo().toString());
+        return ResponseEntity.ok().body(active);
     }
 }

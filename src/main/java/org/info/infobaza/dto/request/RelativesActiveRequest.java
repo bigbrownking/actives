@@ -47,6 +47,10 @@ public class RelativesActiveRequest implements RequestDto{
     @Loggable
     private List<String> iins;
 
+    @Nullable
+    @Loggable
+    private boolean active;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -59,7 +63,8 @@ public class RelativesActiveRequest implements RequestDto{
                 Objects.equals(vids, that.vids) &&
                 Objects.equals(types, that.types) &&
                 Objects.equals(sources, that.sources) &&
-                Objects.equals(iins, that.iins);
+                Objects.equals(iins, that.iins) &&
+                Objects.equals(active, that.active);
     }
 
     @Override

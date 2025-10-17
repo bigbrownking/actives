@@ -11,6 +11,7 @@ import java.time.LocalDate;
 @Builder
 public class InformationRecordDt implements RecordDt {
     private String iin_bin;
+    private String name;
     private LocalDate date;
     private String database;
     private String aktivy;
@@ -23,6 +24,15 @@ public class InformationRecordDt implements RecordDt {
         this.iin_bin = iin_bin;
         this.date = date;
         this.database = database;
+        this.oper = oper;
+        this.dopinfo = dopinfo;
+        this.summ = summ;
+    }
+    public InformationRecordDt(String iin_bin, LocalDate date, String database, String aktivy, String oper, String dopinfo, String summ) {
+        this.iin_bin = iin_bin;
+        this.date = date;
+        this.database = database;
+        this.aktivy = aktivy;
         this.oper = oper;
         this.dopinfo = dopinfo;
         this.summ = summ;

@@ -1,10 +1,7 @@
 package org.info.infobaza.util.convert;
 
 import lombok.extern.slf4j.Slf4j;
-import org.info.infobaza.model.info.active_income.ActiveOverall;
-import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
-import org.info.infobaza.model.info.active_income.EsfOverall;
-import org.info.infobaza.model.info.active_income.InformationRecordDt;
+import org.info.infobaza.model.info.active_income.*;
 import org.info.infobaza.model.info.job.*;
 import org.info.infobaza.model.info.person.nominal.NominalFiz;
 import org.info.infobaza.model.info.person.nominal.NominalUl;
@@ -18,31 +15,85 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.*;
 
 
 @Component
 @Slf4j
 public class Mapper {
-    private final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MM-yyyy", java.util.Locale.ROOT);
+    private final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.ROOT);
 
-    public RelationRecord mapRowToRelation(ResultSet rs, int rowNum) throws SQLException {
+
+    public RelationRecord mapRowToSecRelation(ResultSet rs, int rowNum) {
         try {
+            String vid = rs.getString("status");
+            Map<String, String> dopinfo = new HashMap<>();
+            for (int i = 1; i <= 8; i++) {
+                String columnName = "col" + i;
+                try {
+                    String value  = rs.getString(columnName);
+                    String key = null;
+                    if (value != null && !value.isEmpty()) {
+                        if((vid.equals("Вместе жили в 2 и более адресах")  || vid.equals("Вместе работали")) && columnName.equals("col1")) key = "AP code";
+                        if((vid.equals("Вместе жили в 2 и более адресах") || vid.equals("Вместе работали")) && columnName.equals("col2")) key = "Registration date";
+                        if((vid.equals("Вместе жили в 2 и более адресах") || vid.equals("Вместе работали"))&& columnName.equals("col3")) key = "End registration date";
+
+                        if(vid.equals("Совместные автостраховки") && columnName.equals("col1")) key = "GRNZ";
+                        if(vid.equals("Совместные автостраховки") && columnName.equals("col2")) key = "Save begin date";
+                        if(vid.equals("Совместные автостраховки") && columnName.equals("col3")) key = "Save end date";
+                        if(vid.equals("Совместные автостраховки") && columnName.equals("col4")) key = "VIN code";
+
+                        if((vid.equals("Поступили ДС")  || vid.equals("Перечислил ДС")) && columnName.equals("col1")) key = "Operation date";
+                        if((vid.equals("Поступили ДС") || vid.equals("Перечислил ДС")) && columnName.equals("col2")) key = "Operation summ";
+                        if((vid.equals("Поступили ДС") || vid.equals("Перечислил ДС")) && columnName.equals("col3")) key = "Operation name";
+
+                        if(vid.equals("Коммунальные платежи") && columnName.equals("col1")) key = "Summ";
+                        if(vid.equals("Коммунальные платежи") && columnName.equals("col2")) key = "For";
+                        if(vid.equals("Коммунальные платежи") && columnName.equals("col3")) key = "Number";
+
+                        if(vid.equals("Налоги") && columnName.equals("col1")) key = "Tax for";
+                        if(vid.equals("Налоги") && columnName.equals("col2")) key = "BVU";
+                        if(vid.equals("Налоги") && columnName.equals("col3")) key = "Tax number";
+                        if(vid.equals("Налоги") && columnName.equals("col4")) key = "Summ";
+                        if(vid.equals("Налоги") && columnName.equals("col5")) key = "UGD";
+                        if(vid.equals("Налоги") && columnName.equals("col6")) key = "KNP";
+                        if(vid.equals("Налоги") && columnName.equals("col7")) key = "KBK";
+                        if(vid.equals("Налоги") && columnName.equals("col8")) key = "Purpose of tax";
+
+                        if(vid.equals("Доверенность") && columnName.equals("col2")) key = "Registration_date";
+                        if(vid.equals("Доверенность") && columnName.equals("col1")) key = "For_dover";
+
+                        dopinfo.put(key, value);
+                    }
+                    else{
+                    }
+                } catch (SQLException e) {
+                    log.warn("Column {} not found in ResultSet for row {}, setting to empty string", columnName, rowNum);
+                }
+            }
+
             return new RelationRecord(
                     rs.getString("iin_1"),
                     rs.getString("iin_2"),
                     rs.getString("vid_sviazi"),
-                    rs.getString("status"),
-                    rs.getInt("level_rod")
+                    vid,
+                    dopinfo
             );
-        }catch (Exception e){
-            return new RelationRecord(
-                    rs.getString("iin_1"),
-                    rs.getString("iin_2"),
-                    rs.getString("vid_sviazi"),
-                    rs.getString("status"));
+        } catch (SQLException e) {
+            return null;
         }
     }
-    public InformationRecordDt mapRowToInformation(ResultSet rs, int rowNum) throws SQLException {
+    public RelationRecord mapRowToPriRelation(ResultSet rs, int rowNum) throws SQLException {
+        return new RelationRecord(
+                rs.getString("iin_1"),
+                rs.getString("iin_2"),
+                rs.getString("vid_sviazi"),
+                rs.getString("status"),
+                rs.getInt("level_rod")
+        );
+    }
+
+        public InformationRecordDt mapRowToInformation(ResultSet rs, int rowNum) throws SQLException {
         return new InformationRecordDt(
                 rs.getString("iin_bin"),
                 rs.getObject("date", LocalDate.class),
@@ -76,7 +127,6 @@ public class Mapper {
     }
 
     public ESFInformationRecordDt mapRowToESF(ResultSet rs, int rowNum) throws SQLException {
-
         return new ESFInformationRecordDt(
                 rs.getString("iin_bin"),
                 rs.getString("iin_bin_pokup"),
@@ -90,7 +140,57 @@ public class Mapper {
                 rs.getString("summ")
         );
     }
-    public EsfOverall mapRowToESFOverall(ResultSet rs, int rowNum) throws SQLException {
+    public PenaltyRecord mapRowToPenalty(ResultSet rs, int rowNum) throws SQLException {
+        return new PenaltyRecord(
+                rs.getString("iin_bin"),
+                rs.getString("iin_bin_pokup"),
+                rs.getString("iin_bin_prod"),
+                rs.getObject("date", LocalDate.class),
+                rs.getString("database"),
+                rs.getString("aktivy"),
+                rs.getString("oper"),
+                rs.getString("dopinfo"),
+                rs.getString("place"),
+                rs.getString("summ")
+        );
+    }
+
+    public ESFInformationRecordDt mapRowToUtil(ResultSet rs, int rowNum) throws SQLException {
+        return new ESFInformationRecordDt(
+                rs.getString("iin_bin"),
+                rs.getString("iin_bin_pokup"),
+                rs.getString("iin_bin_prod"),
+                rs.getObject("date", LocalDate.class),
+                rs.getString("database"),
+                rs.getString("aktivy"),
+                rs.getString("oper"),
+                rs.getString("dopinfo"),
+                rs.getString("za_cto"),
+                rs.getString("nomer_licevoy_chet"),
+                rs.getString("summ")
+        );
+    }
+    public NaoConRecordDt mapRowToNaoCon(ResultSet rs, int rowNum) throws SQLException {
+        return new NaoConRecordDt(
+                rs.getString("iin_bin"),
+                rs.getString("iin_bin_pokup"),
+                rs.getString("iin_bin_prod"),
+                rs.getObject("date", LocalDate.class),
+                rs.getString("database"),
+                rs.getString("aktivy"),
+                rs.getString("oper"),
+                rs.getString("dopinfo"),
+                rs.getString("num_doc"),
+                rs.getString("vid_ned"),
+                rs.getString("podrod_vid_ned"),
+                rs.getString("kd_fixed"),
+                rs.getString("rka"),
+                rs.getString("adress"),
+                rs.getString("obshaya_ploshad"),
+                rs.getString("summ")
+        );
+    }
+        public EsfOverall mapRowToESFOverall(ResultSet rs, int rowNum) throws SQLException {
         return new EsfOverall(
                 rs.getString("iin_bin"),
                 rs.getObject("date", LocalDate.class),
@@ -106,21 +206,25 @@ public class Mapper {
     }
 
     public SupervisorRecord mapRowToSupervisor(ResultSet rs, int rowNum) throws SQLException {
-        return SupervisorRecord.builder()
+        SupervisorRecord s = SupervisorRecord.builder()
                 .iin_bin(rs.getString("employee_iin_bin"))
                 .positionType(rs.getString("position_type"))
                 .taxpayer_iin_bin(rs.getString("taxpayer_iin_bin"))
                 .taxpayerType(rs.getString("taxpayer_type"))
                 .build();
+        log.info("recordd : {}", s);
+        return s;
     }
     public SupervisorRecord mapRowToFounder(ResultSet rs, int rowNum) throws SQLException {
-        return SupervisorRecord.builder()
+        SupervisorRecord s= SupervisorRecord.builder()
                 .iin_bin(rs.getString("founder_iin_bin"))
                 .positionType("Учредитель")
                 .taxpayer_iin_bin(rs.getString("taxpayer_iin_bin"))
                 .taxpayerType(rs.getString("taxpayer_type"))
                 .taxpayerName(rs.getString("taxpayer_name"))
                 .build();
+        log.info("recordFFFF : {}", s);
+        return  s;
     }
 
     public CompanyRecord mapRowToCompany(ResultSet rs, int rowNum) throws SQLException {

@@ -88,13 +88,14 @@ public class InformationController {
     @LogRequest
     @PostMapping("/yearCount")
     @Cacheable(value = "yearCounts", key = "#request")
-    public ResponseEntity<YearlyRecordCounts> getYearlyRecordCounts(@RequestBody YearlyCountRequest request) {
+    public ResponseEntity<YearlyRecordCounts> getYearlyRecordCounts(@RequestBody RelativesActiveRequest request) {
         return ResponseEntity.ok(analyzer.getYearlyRecordCounts(
                 request.getIin(),
                 request.getDateFrom().toString(),
                 request.getDateTo().toString(),
                 request.getSources(),
                 request.getTypes(),
+                request.getVids(),
                 request.getIins(),
                 request.isActive()
         ));

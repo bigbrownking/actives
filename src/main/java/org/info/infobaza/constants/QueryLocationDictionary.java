@@ -35,7 +35,6 @@ public enum QueryLocationDictionary {
     FNO270_в_т_ч_Доход_из_источников_за_пределами_РК("sql/FNO270/в_т_ч_Доход_из_источников_за_пределами_РК.sql"),
     FNO270_в_т_ч_Доход_лица_занимающиеся_частной_практикой("sql/FNO270/в_т_ч_Доход_лица_занимающиеся_частной_практикой.sql"),
     FNO270_в_т_ч_Имущественный_доход("sql/FNO270/в_т_ч_Имущественный_доход.sql"),
-    FNO270_Доход_по_данным_ФНО("sql/FNO270/Доход_по_данным_ФНО.sql"),
     FNO240_Прибыль_КИК("sql/FNO240/Прибыль_КИК.sql"),
     FNO240_Иные_имущества("sql/FNO240/Иные_имущества.sql"),
     FNO250_Иные_имущества("sql/FNO250/Иные_имущества.sql"),
@@ -73,7 +72,9 @@ public enum QueryLocationDictionary {
     Supervisor_ruk("sql/Supervisor/ruk.sql"),
     Supervisor_uchr("sql/Supervisor/uchr.sql"),
     Supervisor_hist_ruk("sql/Supervisor/hist_ruk.sql"),
-    Supervisor_hist_uchr("sql/Supervisor/hist_uchr.sql");
+    Supervisor_hist_uchr("sql/Supervisor/hist_uchr.sql"),
+    Turnover_turnover("sql/turnover/turnover.sql"),
+    Коммунальные("sql/Административные штрафы/коммунальные.sql");
 
     private final String path;
 

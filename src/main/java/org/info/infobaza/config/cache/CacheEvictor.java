@@ -9,8 +9,10 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class CacheEvictor {
 
-    @Scheduled(cron = "0 0 0 1 * ?")
-    @CacheEvict(cacheNames = {"actives", "incomes", "yearCounts", "primaryRelations", "secondaryRelations"}, allEntries = true)
+    //@Scheduled(cron = "0 0 0 1 * ?")
+    @Scheduled(cron = "0 0 */3 * * ?")
+    @CacheEvict(cacheNames = {"actives", "incomes", "yearCounts",
+             "activeCounts", "primaryRelations", "secondaryRelations"}, allEntries = true)
     public void evictMonthlyCaches() {
         log.info("Deleting old cache...");
     }

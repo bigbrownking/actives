@@ -13,5 +13,6 @@ public class Person {
     private String iin;
     private String image;
     private List<String> portret;
+    private Boolean isCryptoActive;
     private Boolean isNominal;
 }

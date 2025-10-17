@@ -4,7 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.info.infobaza.dto.request.MainRequest;
 import org.info.infobaza.dto.response.job.*;
 import org.info.infobaza.exception.NotFoundException;
+import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
+import org.info.infobaza.model.info.job.PenaltyRecord;
 import org.info.infobaza.model.info.job.TurnoverRecord;
+import org.info.infobaza.service.adm_shtraf.AdministrationPayService;
 import org.info.infobaza.service.enpf.ENPFService;
 import org.info.infobaza.service.enpf.HeadService;
 import org.info.infobaza.service.enpf.IndustrialService;
@@ -23,6 +26,7 @@ import java.util.List;
 @RequestMapping("/job")
 public class JobController {
     private final ENPFService enpfService;
+    private final AdministrationPayService administrationPayService;
     private final IndustrialService industrialService;
     private final HeadService headService;
 
@@ -59,6 +63,16 @@ public class JobController {
     public ResponseEntity<List<BankTurnoverGroup>> getTurnover(@RequestBody MainRequest mainRequest) throws IOException {
         return ResponseEntity.ok(enpfService.getTurnover(
                 mainRequest.getIin_bin()
+        ));
+    }
+
+    @LogRequest
+    @PostMapping("/penalty")
+    public ResponseEntity<List<PenaltyRecord>> getPenalty(@RequestBody MainRequest mainRequest) throws IOException {
+        return ResponseEntity.ok(administrationPayService.getAdministrationPay(
+                mainRequest.getIin_bin(),
+                mainRequest.getDateFrom().toString(),
+                mainRequest.getDateTo().toString()
         ));
     }
 }

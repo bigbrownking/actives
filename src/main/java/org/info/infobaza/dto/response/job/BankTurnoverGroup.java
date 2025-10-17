@@ -13,5 +13,6 @@ import java.util.List;
 public class BankTurnoverGroup {
     private String bankName;
     private Integer count;
+    private String totalSum;
     private List<TurnoverRecord> records;
 }

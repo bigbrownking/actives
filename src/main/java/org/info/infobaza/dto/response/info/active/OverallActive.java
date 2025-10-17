@@ -15,6 +15,6 @@ public class OverallActive implements ActiveResponse{
     private String dateFrom;
     private String dateTo;
     private List<String> selectedYears;
-    private Map<String, List<RecordGroup>> recordsByOper;
+    private List<RecordGroup> recordsByOper;
     private Map<String, List<String>> iinToRelation;
 }

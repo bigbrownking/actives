@@ -125,19 +125,4 @@ public class FNO270Service implements InformationalService {
         return jdbcTemplate.query(sql, mapper::mapRowToIncome);
     }
 
-
-    @ServiceMetadata(
-            source = {"FNO270"},
-            vids = {"Доход по данным ФНО"},
-            isIncome = true
-    )
-    public List<InformationRecordDt> getFNO270Income(String iin, String dateFrom, String dateTo) throws IOException {
-        if (iin == null || iin.trim().isEmpty()) {
-            throw new IllegalArgumentException("IIN cannot be null or empty");
-        }
-        log.info("Fetching FNO270 income for IIN: {}", iin);
-        String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.FNO270_Доход_по_данным_ФНО.getPath(), iin, dateFrom, dateTo);
-        return jdbcTemplate.query(sql, mapper::mapRowToIncome);
-    }
-
 }
