@@ -4,6 +4,7 @@ import com.lowagie.text.DocumentException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.info.infobaza.dto.request.ExportRequest;
+import org.info.infobaza.dto.request.MassExportRequest;
 import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.service.export.ExcelExportService;
 import org.info.infobaza.service.export.PdfExportService;
@@ -49,5 +50,14 @@ public class ExportController {
                               HttpServletResponse response) throws IOException, NotFoundException {
         generate_excel_header(exportRequest, response);
         excelExportService.exportToExcel(response.getOutputStream(), exportRequest);
+    }
+
+    @LogRequest
+    @PostMapping("/mass")
+    public void massExport(@RequestBody MassExportRequest massExportRequest,
+                           HttpServletResponse response) throws IOException, NotFoundException {
+        generate_excel_header(massExportRequest, response);
+        excelExportService.exportToExcelMass(response.getOutputStream(), massExportRequest);
+
     }
 }

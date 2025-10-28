@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.ClientAnchor;
 import org.apache.poi.xssf.usermodel.*;
 import org.info.infobaza.dto.request.ExportRequest;
+import org.info.infobaza.dto.request.MassExportRequest;
 import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
 import org.info.infobaza.dto.response.info.income.IncomeWithRecords;
 import org.info.infobaza.dto.response.job.Head;
@@ -132,6 +133,81 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             workbook.write(outputStream);
         }
 
+    }
+
+    @Override
+    public void exportToExcelMass(OutputStream outputStream, MassExportRequest request) throws IOException, NotFoundException {
+        List<String> iins = request.getIins();
+        String dateFrom = "1980";
+        String dateTo = "2025";
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            XSSFSheet sheet = workbook.createSheet("Person Report");
+            int rowIndex = 0;
+            for (String iinInput : iins) {
+                List<String> iinsToProcess = new ArrayList<>();
+                iinsToProcess.add(iinInput);
+
+                // Fetch primary relations for the main IIN
+                RelationActiveWithTypes primaryRelations = relationService.getPrimaryRelationsOfPerson(
+                        iinInput, dateFrom, dateTo);
+                if (primaryRelations != null && primaryRelations.getTypeToRelation() != null) {
+                    iinsToProcess.addAll(
+                            primaryRelations.getTypeToRelation().values().stream()
+                                    .flatMap(List::stream)
+                                    .map(RelationActive::getIin)
+                                    .filter(x -> x != null && !x.isEmpty())
+                                    .distinct()
+                                    .toList()
+                    );
+                }
+
+                // Process each IIN
+                for (int i = 0; i < iinsToProcess.size(); i++) {
+                    String iin = iinsToProcess.get(i);
+
+                    // Add section header for the current IIN
+                    rowIndex = addBoldRow(sheet, rowIndex, "Данные для ИИН: " + iin);
+                    rowIndex++;
+
+                    // Fetch data for the current IIN
+                    Person person = portretService.getPerson(iin);
+                    RelationActiveWithTypes personPrimaryRelations = relationService.getPrimaryRelationsOfPerson(
+                            iin, dateFrom, dateTo);
+                    RelationActiveWithTypes personSecondaryRelations = relationService.getSecondaryRelationsOfPerson(
+                            iin, dateFrom, dateTo);
+                    List<Pension> pensions = enpfService.getPension(iin, dateFrom, dateTo);
+                    Head head = headService.constructHead(iin, dateFrom, dateTo);
+                    Industry industry = industrialService.getIndustry(iin);
+                    List<TurnoverRecord> turnoverRecords = enpfService.getTurnoverRecords(iin);
+
+                    ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
+                            iin, dateFrom, dateTo, null, null, null,
+                            null, request.getIins());
+                    IncomeWithRecords incomeResponse = (IncomeWithRecords) analyzer.getAllIncomesOfPersonsByDates(
+                            iin, dateFrom, dateTo, null, null, null,
+                            request.getIins());
+
+                    // Add sections for this IIN
+                    rowIndex = addPortraitSection(workbook, sheet, rowIndex, person);
+                    rowIndex = addRelationsSection(sheet, rowIndex, personPrimaryRelations, personSecondaryRelations);
+                    rowIndex = addActivesAndIncomesSection(sheet, rowIndex, activeResponse, incomeResponse);
+                    rowIndex = addJobInformationSection(sheet, rowIndex, pensions, head, industry, turnoverRecords);
+
+                    // Add blank row between IINs (except for the last one)
+                    if (i < iinsToProcess.size() - 1) {
+                        rowIndex++;
+                    }
+                }
+
+                // Auto-size columns
+                for (int i = 0; i < 9; i++) {
+                    sheet.autoSizeColumn(i);
+                }
+
+                // Write to output stream
+                workbook.write(outputStream);
+            }
+        }
     }
 
     private int addPortraitSection(XSSFWorkbook workbook, XSSFSheet sheet, int rowIndex, Person person) {
@@ -320,7 +396,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                     setCell(row, 6, esfRecord.getOper() != null ? esfRecord.getOper() : "-", false);
                     setCell(row, 7, esfRecord.getDopinfo() != null ? esfRecord.getDopinfo() : "-", false);
                     setCell(row, 8, esfRecord.getSumm() != null ? esfRecord.getSumm() : "-", false);
-                } else if(record instanceof InformationRecordDt info){
+                } else if (record instanceof InformationRecordDt info) {
                     setCell(row, 0, info.getIin_bin() != null ? record.getIin_bin() : "-", false);
                     setCell(row, 1, "-", false);
                     setCell(row, 2, "-", false);
@@ -330,7 +406,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                     setCell(row, 6, info.getOper() != null ? record.getOper() : "-", false);
                     setCell(row, 7, info.getDopinfo() != null ? record.getDopinfo() : "-", false);
                     setCell(row, 8, info.getSumm() != null ? record.getSumm() : "-", false);
-                }else if(record instanceof NaoConRecordDt nao){
+                } else if (record instanceof NaoConRecordDt nao) {
                     setCell(row, 0, nao.getIin_bin() != null ? record.getIin_bin() : "-", false);
                     setCell(row, 1, "-", false);
                     setCell(row, 2, "-", false);
@@ -449,7 +525,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                 setCell(row, 0, supervisor.getIin_bin() != null ? supervisor.getIin_bin() : "-", false);
                 setCell(row, 1, supervisor.getPositionType() != null ? supervisor.getPositionType() : "-", false);
                 setCell(row, 2, supervisor.getTaxpayer_iin_bin() != null ? supervisor.getTaxpayer_iin_bin() : "-", false);
-                setCell(row, 3, supervisor.getTaxpayerType() != null ? supervisor.getTaxpayerType() : "-", false);
+                //  setCell(row, 3, supervisor.getTaxpayerType() != null ? supervisor.getTaxpayerType() : "-", false);
                 setCell(row, 4, supervisor.getTaxpayerName() != null ? supervisor.getTaxpayerName() : "-", false);
             }
         }
@@ -529,7 +605,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
     }
 
     private int addTurnoversTable(XSSFSheet sheet, int rowIndex,
-                                   List<TurnoverRecord> turnoverRecords){
+                                  List<TurnoverRecord> turnoverRecords) {
         XSSFRow headerRow = sheet.createRow(rowIndex++);
         setCell(headerRow, 0, "ИИН/БИН", true);
         setCell(headerRow, 1, "Название банка", true);

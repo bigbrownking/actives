@@ -2,7 +2,6 @@ package org.info.infobaza.util.convert;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.info.infobaza.model.main.ERole;
 import org.info.infobaza.model.main.Role;
 import org.info.infobaza.model.main.User;
 import org.info.infobaza.model.ser.UserSer;
@@ -27,7 +26,7 @@ public class UserConverter {
     private final String emailPrefix = "ser_";
 
     public User fromSerToItap(UserSer userSer) {
-        Role role = roleRepository.findByName(ERole.LEVEL_1_USER).orElseThrow(() -> new IllegalStateException("Role not found"));
+        Role role = roleRepository.findByName("USER").orElseThrow(() -> new IllegalStateException("Role not found"));
         Set<Role> roles = new HashSet<>();
         roles.add(role);
         return User.builder()

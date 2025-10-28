@@ -6,6 +6,8 @@ import lombok.Getter;
 public enum QueryLocationDictionary {
 
     НАО_ЦОН_Недвижимое_имущество("sql/НАО ЦОН/Недвижимое_имущество.sql"),
+    НАО_ЦОН_Недвижимое_имущество_kd("sql/НАО ЦОН/Недвижимое_имущество_kd.sql"),
+    НАО_ЦОН_Недвижимое_имущество_rka("sql/НАО ЦОН/Недвижимое_имущество_rka.sql"),
     ЕНИС_Нотариус_Общий("sql/ЕНИС Нотариус/enis.sql"),
     КАП_МВД_Cведения_по_владельцам_Авто_Транспортные_средства("sql/КАП МВД-Cведения по владельцам Авто/Транспортные_средства.sql"),
     FM_Денежные_средства("sql/FM/Денежные_средства.sql"),
@@ -73,8 +75,15 @@ public enum QueryLocationDictionary {
     Supervisor_uchr("sql/Supervisor/uchr.sql"),
     Supervisor_hist_ruk("sql/Supervisor/hist_ruk.sql"),
     Supervisor_hist_uchr("sql/Supervisor/hist_uchr.sql"),
+    Supervisor_is_nominal_ruc_uchr("sql/Supervisor/is_nominal_ruc_uchr.sql"),
+    Supervisor_is_nominal("sql/Supervisor/is_nominal_ruc_uchr.sql"),
     Turnover_turnover("sql/turnover/turnover.sql"),
-    Коммунальные("sql/Административные штрафы/коммунальные.sql");
+    Коммунальные("sql/Административные штрафы/коммунальные.sql"),
+    CARS_CARS("sql/cars/cars.sql"),
+    CARS_owner_vin("sql/cars/car_owner_vin.sql"),
+    CARS_owner_grnz("sql/cars/car_owner_grnz.sql"),
+    CARS_insurance_vin("sql/cars/car_insurance_vin.sql"),
+    CARS_insurance_grnz("sql/cars/car_insurance_grnz.sql");
 
     private final String path;
 

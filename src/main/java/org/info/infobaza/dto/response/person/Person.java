@@ -15,4 +15,6 @@ public class Person {
     private List<String> portret;
     private Boolean isCryptoActive;
     private Boolean isNominal;
+    private Boolean isNominalUl;
+    private String iinRukUch;
 }

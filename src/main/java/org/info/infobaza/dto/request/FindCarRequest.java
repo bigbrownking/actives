@@ -1,13 +1,23 @@
 package org.info.infobaza.dto.request;
 
 import jakarta.annotation.Nullable;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.info.infobaza.util.logging.Loggable;
 
 @Getter
-public class GetPortretRequest {
+@NoArgsConstructor
+@EqualsAndHashCode
+public class FindCarRequest {
+    @Nullable
     @Loggable
-    private String iin;
+    private String vin;
+
+    @Nullable
+    @Loggable
+    private String grnz;
+
 
     @Nullable
     @Loggable

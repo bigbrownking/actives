@@ -1,16 +1,13 @@
 package org.info.infobaza.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.info.infobaza.constants.Button;
-import org.info.infobaza.dto.request.RelativesActiveRequest;
-import org.info.infobaza.dto.request.RelativesIncomeRequest;
-import org.info.infobaza.dto.request.YearlyCountRequest;
+import org.info.infobaza.dto.request.*;
 import org.info.infobaza.dto.response.info.active.ActiveResponse;
 import org.info.infobaza.dto.response.info.income.IncomeResponse;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyRecordCounts;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.constants.Dictionary;
-import org.info.infobaza.service.history.HistoryService;
+import org.info.infobaza.service.ObjectFinder;
 import org.info.infobaza.util.logging.LogRequest;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +22,6 @@ public class InformationController {
 
     private final Analyzer analyzer;
     private final Dictionary dictionary;
-    private final HistoryService historyService;
 
     @LogRequest
     @PostMapping("/active")
@@ -42,7 +38,7 @@ public class InformationController {
                 request.getIins()
         );
 
-       // historyService.createRequest(request);
+        // historyService.createRequest(request);
         return ResponseEntity.ok(activeResponse);
     }
 
@@ -81,7 +77,7 @@ public class InformationController {
                 request.getIins()
         );
 
-       // historyService.createRequest(request);
+        // historyService.createRequest(request);
         return ResponseEntity.ok(incomeResponse);
     }
 
@@ -102,28 +98,28 @@ public class InformationController {
     }
 
     @GetMapping("/sourcesIncome")
-    public ResponseEntity<List<String>> getAllSourcesIncome(){
+    public ResponseEntity<List<String>> getAllSourcesIncome() {
         return ResponseEntity.ok(dictionary.getSourcesIncome());
     }
 
     @GetMapping("/vidIncome")
-    public ResponseEntity<List<String>> getAllVidIncome(){
+    public ResponseEntity<List<String>> getAllVidIncome() {
         return ResponseEntity.ok(dictionary.getVidIncome());
     }
 
 
     @GetMapping("/sourcesActive")
-    public ResponseEntity<List<String>> getAllSourcesActive(){
+    public ResponseEntity<List<String>> getAllSourcesActive() {
         return ResponseEntity.ok(dictionary.getSourcesActive());
     }
 
     @GetMapping("/typesActive")
-    public ResponseEntity<List<String>> getAllTypesActive(){
+    public ResponseEntity<List<String>> getAllTypesActive() {
         return ResponseEntity.ok(dictionary.getTypesActives());
     }
 
     @GetMapping("/vidActive")
-    public ResponseEntity<List<String>> getAllVidActive(){
+    public ResponseEntity<List<String>> getAllVidActive() {
         return ResponseEntity.ok(dictionary.getVidActive());
     }
 

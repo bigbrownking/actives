@@ -448,7 +448,7 @@ public class PdfExportServiceImpl implements PdfExportService {
                 addTableCell(supervisorTable, supervisor.getIin_bin() != null ? supervisor.getIin_bin() : "-", font);
                 addTableCell(supervisorTable, supervisor.getPositionType() != null ? supervisor.getPositionType() : "-", font);
                 addTableCell(supervisorTable, supervisor.getTaxpayer_iin_bin() != null ? supervisor.getTaxpayer_iin_bin() : "-", font);
-                addTableCell(supervisorTable, supervisor.getTaxpayerType() != null ? supervisor.getTaxpayerType() : "-", font);
+            //    addTableCell(supervisorTable, supervisor.getTaxpayerType() != null ? supervisor.getTaxpayerType() : "-", font);
                 addTableCell(supervisorTable, supervisor.getTaxpayerName() != null ? supervisor.getTaxpayerName() : "-", font);
             }
 

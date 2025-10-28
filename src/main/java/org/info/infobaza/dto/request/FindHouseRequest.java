@@ -1,13 +1,43 @@
 package org.info.infobaza.dto.request;
 
 import jakarta.annotation.Nullable;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.info.infobaza.util.logging.LogRequest;
 import org.info.infobaza.util.logging.Loggable;
 
 @Getter
-public class GetPortretRequest {
+@NoArgsConstructor
+@EqualsAndHashCode
+public class FindHouseRequest {
+    @Nullable
     @Loggable
-    private String iin;
+    private String kd;
+
+    @Nullable
+    @Loggable
+    private String rka;
+
+//    @Nullable
+//    @Loggable
+//    private String city;
+//
+//    @Nullable
+//    @Loggable
+//    private String district;
+//
+//    @Nullable
+//    @Loggable
+//    private String street;
+//
+//    @Nullable
+//    @Loggable
+//    private String house;
+//
+//    @Nullable
+//    @Loggable
+//    private String apartment;
 
     @Nullable
     @Loggable

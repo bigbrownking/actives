@@ -5,6 +5,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.info.infobaza.dto.request.ExportRequest;
+import org.info.infobaza.dto.request.MassExportRequest;
 import org.info.infobaza.dto.response.info.ServiceSources;
 import org.info.infobaza.service.InformationalService;
 import org.info.infobaza.service.ServiceMetadata;
@@ -12,6 +13,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 @Component
@@ -57,11 +59,22 @@ public final class Dictionary {
         response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".pdf");
     }
 
-    public static void generate_excel_header(ExportRequest request,
-                                           HttpServletResponse response){
+    public static void generate_excel_header(Object request, HttpServletResponse response) {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=person_" + request.getIin() + ".xlsx");
+        String filename;
+
+        if (request instanceof ExportRequest exportRequest) {
+            filename = "person_" + exportRequest.getIin() + ".xlsx";
+        } else if (request instanceof MassExportRequest) {
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            filename = "mass_export_" + timestamp + ".xlsx";
+        } else {
+            filename = "export.xlsx";
+        }
+
+        response.setHeader("Content-Disposition", "attachment; filename=" + filename);
     }
+
 
     public static void generate_word_header(ExportRequest request,
                                            HttpServletResponse response){

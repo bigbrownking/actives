@@ -55,7 +55,6 @@ public class Analyzer {
     private final JdbcTemplate jdbcTemplate;
     private final Mapper mapper;
     private final SQLFileUtil sqlFileUtil;
-    private final IinChecker iinChecker;
     private final NumberConverter numberConverter;
     private final NaoConService naoConService;
 
@@ -232,7 +231,7 @@ public class Analyzer {
 
         String mainIin = iins.get(0);
         iins.parallelStream().forEach(currentIin -> {
-            boolean isUl = iinChecker.isUl(currentIin);
+            boolean isUl = IinChecker.isUl(currentIin);
             for (String year : effectiveYears) {
                 String effectiveDateFrom = year.isEmpty() ? dateFrom : year + "-01-01";
                 String effectiveDateTo = year.isEmpty() ? dateTo : year + "-12-31";
@@ -513,7 +512,18 @@ public class Analyzer {
                                    List<ESFInformationRecordDt> esfInformationRecords,
                                    List<NaoConRecordDt> naoConRecords,
                                    String dateFrom, String dateTo, List<String> years, List<String> iins) {
+
+        log.info("➡ Starting toActive() for period [{} - {}], years: {}, IINs: {}", dateFrom, dateTo, years, iins);
+
         boolean isSummaryMode = years == null || years.isEmpty();
+        log.info("Summary mode: {}", isSummaryMode);
+
+        // Step 1: Combine all record lists into one
+        log.info("Input sizes — Info: {}, ESF: {}, NaoCon: {}",
+                informationRecords == null ? 0 : informationRecords.size(),
+                esfInformationRecords == null ? 0 : esfInformationRecords.size(),
+                naoConRecords == null ? 0 : naoConRecords.size());
+
         List<RecordDt> allRecords = Stream.of(
                         informationRecords == null ? Collections.<RecordDt>emptyList() : informationRecords,
                         esfInformationRecords == null ? Collections.<RecordDt>emptyList() : esfInformationRecords,
@@ -521,28 +531,64 @@ public class Analyzer {
                 )
                 .flatMap(List::stream)
                 .filter(Objects::nonNull)
-                .filter(record -> record.getDate() != null && record.getOper() != null)
-                .filter(record -> isSummaryMode || years.contains(String.valueOf(record.getDate().getYear())))
+                .filter(record -> {
+                    boolean valid = record.getDate() != null && record.getOper() != null;
+                    if (!valid) {
+                        log.info("Skipping invalid record (missing date or oper): {}", record);
+                    }
+                    return valid;
+                })
+                .filter(record -> {
+                    boolean yearMatch = isSummaryMode || years.contains(String.valueOf(record.getDate().getYear()));
+                    if (!yearMatch) {
+                        log.info("Filtered out record not in selected years: {}", record.getDate().getYear());
+                    }
+                    return yearMatch;
+                })
                 .sorted(Comparator.comparing(RecordDt::getDate, Comparator.nullsLast(Comparator.naturalOrder())))
                 .distinct()
                 .collect(Collectors.toList());
 
-        log.info("ALL RECORDS SIZE: {}", allRecords.size());
+        log.info("✅ Combined records count: {}", allRecords.size());
+
+        // Step 2: Deduplication
         List<RecordDt> deduplicatedRecords = deduplicateRecords(allRecords);
+        log.info("🧩 After deduplication: {} records ({} removed)",
+                deduplicatedRecords.size(), allRecords.size() - deduplicatedRecords.size());
+
         if (deduplicatedRecords.isEmpty()) {
-            log.warn("No records provided for date range {} to {}, years: {}", dateFrom, dateTo, years);
+            log.info("⚠ No records found for date range [{} - {}], years: {}", dateFrom, dateTo, years);
             return isSummaryMode
-                    ? OverallActive.builder().dateFrom(dateFrom).dateTo(dateTo).selectedYears(years).recordsByOper(new ArrayList<>()).build()
-                    : ActiveWithRecords.builder().dateFrom(dateFrom).dateTo(dateTo).selectedYears(years).recordsByOper(new ArrayList<>()).build();
+                    ? OverallActive.builder()
+                    .dateFrom(dateFrom)
+                    .dateTo(dateTo)
+                    .selectedYears(years)
+                    .recordsByOper(new ArrayList<>())
+                    .build()
+                    : ActiveWithRecords.builder()
+                    .dateFrom(dateFrom)
+                    .dateTo(dateTo)
+                    .selectedYears(years)
+                    .recordsByOper(new ArrayList<>())
+                    .build();
         }
-        log.info("AFTER DEDUPLICATION: {}", deduplicatedRecords.size());
 
+        // Step 3: Formatting
+        log.info("Formatting {} records...", deduplicatedRecords.size());
         List<RecordDt> formattedRecords = formatRecords(deduplicatedRecords);
+        log.info("✅ Records formatted successfully: {}", formattedRecords.size());
 
+        // Step 4: Group or return as-is
         if (isSummaryMode) {
+            log.info("🔹 Summary mode enabled — grouping records by operation...");
             Map<String, List<RecordDt>> recordsByOper = groupRecordsByOper(formattedRecords);
-            return buildOverallActive(recordsByOper, dateFrom, dateTo, years, iins);
+            recordsByOper.forEach((oper, list) ->
+                    log.debug("Group [{}]: {} records", oper, list.size()));
+            ActiveResponse response = buildOverallActive(recordsByOper, dateFrom, dateTo, years, iins);
+            log.info("🏁 Summary mode completed — returning OverallActive");
+            return response;
         } else {
+            log.info("📄 Detailed mode enabled — returning ActiveWithRecords with {} records", formattedRecords.size());
             return ActiveWithRecords.builder()
                     .dateFrom(dateFrom)
                     .dateTo(dateTo)
@@ -551,6 +597,7 @@ public class Analyzer {
                     .build();
         }
     }
+
 
     private List<RecordDt> deduplicateRecords(List<RecordDt> records) {
         if (records == null || records.isEmpty()) {

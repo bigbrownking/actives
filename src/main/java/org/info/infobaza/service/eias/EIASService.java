@@ -82,7 +82,9 @@ public class EIASService implements InformationalService {
         }
         log.info("Fetching eias paper for IIN: {}", iin);
         String sql = sqlFileUtil.getSqlWithIinAndDates(QueryLocationDictionary.ЕИАС_Ценные_бумаги.getPath(), iin, dateFrom, dateTo);
-        return jdbcTemplate.query(sql, mapper::mapRowToESF);
+        List<ESFInformationRecordDt> esfInformationRecordDts =  jdbcTemplate.query(sql, mapper::mapRowToESF);
+        log.info("SIZEIS : "+ esfInformationRecordDts.size());
+        return esfInformationRecordDts;
     }
 
 

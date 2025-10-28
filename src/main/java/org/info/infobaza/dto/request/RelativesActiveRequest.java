@@ -2,10 +2,7 @@ package org.info.infobaza.dto.request;
 
 import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Builder;
 import lombok.Getter;
-import org.info.infobaza.model.main.Request;
-import org.info.infobaza.model.main.RequestStatus;
 import org.info.infobaza.util.logging.Loggable;
 
 import java.time.LocalDate;
@@ -72,8 +69,4 @@ public class RelativesActiveRequest implements RequestDto{
         return Objects.hash(iin, dateFrom, dateTo, years, vids, types, sources, iins);
     }
 
-    @Override
-    public RequestStatus getStatus() {
-        return RequestStatus.ACTIVE;
-    }
 }

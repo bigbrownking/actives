@@ -453,7 +453,7 @@ public class WordExportServiceImpl implements WordExportService {
                 setTableCell(row.getCell(0), supervisor.getIin_bin() != null ? supervisor.getIin_bin() : "-", false);
                 setTableCell(row.getCell(1), supervisor.getPositionType() != null ? supervisor.getPositionType() : "-", false);
                 setTableCell(row.getCell(2), supervisor.getTaxpayer_iin_bin() != null ? supervisor.getTaxpayer_iin_bin() : "-", false);
-                setTableCell(row.getCell(3), supervisor.getTaxpayerType() != null ? supervisor.getTaxpayerType() : "-", false);
+               // setTableCell(row.getCell(3), supervisor.getTaxpayerType() != null ? supervisor.getTaxpayerType() : "-", false);
                 setTableCell(row.getCell(4), supervisor.getTaxpayerName() != null ? supervisor.getTaxpayerName() : "-", false);
             }
         }

@@ -92,6 +92,7 @@ public class HeadService {
         addHistoricalRecords(supervisorRecordSup, historySupervisorRecordSup, "Руководитель");
         addHistoricalRecords(supervisorRecordFou, historySupervisorRecordFou, "Учредитель");
 
+        //isNominals();
 
         if (supervisorRecordSup.isEmpty() && supervisorRecordFou.isEmpty()) {
             return new ArrayList<>();
@@ -128,7 +129,7 @@ public class HeadService {
                         .iin_bin(histRecord.getIinBin())
                         .positionType("Исторический " + positionType)
                         .taxpayer_iin_bin(companyIin)
-                        .taxpayerType(null)
+                        .isNominal(portretService.isNominalUl(histRecord.getIinBin()))
                         .taxpayerName(name)
                         .build();
 
@@ -137,6 +138,14 @@ public class HeadService {
         }
     }
 
+    private void isNominals(List<SupervisorRecord> rucs, List<SupervisorRecord> uchs){
+        for(SupervisorRecord supervisorRecord : rucs){
+
+        }
+        for (SupervisorRecord supervisorRecord : uchs){
+
+        }
+    }
 
     private List<CompanyRecord> getCompanyInfo(String iin) throws IOException {
         if (iin == null || iin.trim().isEmpty()) {

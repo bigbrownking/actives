@@ -55,7 +55,7 @@ public class RelationService {
         List<RelationRecord> relations = jdbcTemplate.query(sql, mapper::mapRowToSecRelation);
 
         relations = relations.stream()
-                .filter(relation -> !iinChecker.isUl(relation.getIin_2()))
+                .filter(relation -> !IinChecker.isUl(relation.getIin_2()))
                 .collect(Collectors.toList());
 
         // Step 1: Process "Доверенность" statuses individually

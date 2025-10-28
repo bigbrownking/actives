@@ -36,7 +36,7 @@ public class FNOService implements InformationalService {
         if (iin == null || iin.trim().isEmpty()) {
             throw new IllegalArgumentException("IIN cannot be null or empty");
         }
-        if(iinChecker.isUl(iin)){
+        if(IinChecker.isUl(iin)){
             return new ArrayList<>();
         }
         log.info("Fetching FNO income ip for IIN: {}", iin);
@@ -54,7 +54,7 @@ public class FNOService implements InformationalService {
         if (iin == null || iin.trim().isEmpty()) {
             throw new IllegalArgumentException("IIN cannot be null or empty");
         }
-        if(!iinChecker.isUl(iin)){
+        if(!IinChecker.isUl(iin)){
             return new ArrayList<>();
         }
         log.info("Fetching FNO sgd ul for IIN: {}", iin);

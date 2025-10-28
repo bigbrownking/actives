@@ -6,19 +6,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.info.infobaza.constants.QueryLocationDictionary;
+import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.dto.response.person.Age;
 import org.info.infobaza.dto.response.person.Person;
-import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.exception.NotFoundException;
+import org.info.infobaza.model.info.active_income.InformationRecordDt;
+import org.info.infobaza.model.info.active_income.NaoConRecordDt;
 import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.person.DossierPerson;
-import org.info.infobaza.model.info.person.nominal.Nominal;
-import org.info.infobaza.model.info.person.nominal.NominalFiz;
-import org.info.infobaza.model.info.person.nominal.NominalUl;
 import org.info.infobaza.model.info.person.PersonRecord;
+import org.info.infobaza.model.info.person.nominal.Nominal;
+import org.info.infobaza.model.info.person.nominal.NominalRucUchr;
 import org.info.infobaza.security.jwt.JwtTokenUtil;
+import org.info.infobaza.service.cars.CarService;
+import org.info.infobaza.service.nao_con.NaoConService;
 import org.info.infobaza.util.convert.Mapper;
-import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.util.convert.NumberConverter;
 import org.info.infobaza.util.convert.SQLFileUtil;
 import org.info.infobaza.util.date.DateUtil;
@@ -35,6 +38,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
+import static org.info.infobaza.util.convert.IinChecker.isUl;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -47,6 +52,9 @@ public class PortretService {
     private final RestTemplate restTemplate;
     private final JwtTokenUtil jwtTokenUtil;
     private final NumberConverter numberConverter;
+
+    private final NaoConService naoConService;
+    private final CarService carService;
 
 
     private static final String IIN_PATTERN = "\\d{12}";
@@ -73,6 +81,7 @@ public class PortretService {
         List<String> status = determineStatus(age, portrets);
         boolean turnover = fetchTurnover(iin);
 
+
         return new Person(
                 fullName,
                 age != null ? age.getAge() : 0,
@@ -80,7 +89,9 @@ public class PortretService {
                 photo,
                 status,
                 turnover,
-                isNominal(iin)
+                isNominal(iin),
+                isNominalUl(iin),
+                isUl(iin) ? getIinRucUch(iin) : null
         );
     }
 
@@ -186,6 +197,7 @@ public class PortretService {
             return Collections.emptyList();
         }
     }
+
     private boolean fetchTurnover(String iin) {
         try {
             String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Turnover_turnover.getPath(), iin);
@@ -402,5 +414,27 @@ public class PortretService {
             nominals = jdbcTemplate.query(nominalUlSql, mapper::mapRowToNominalUl);
         }
         return !nominals.isEmpty();
+    }
+
+    public boolean isNominalUl(String iin_bin) throws IOException {
+        validateIin(iin_bin);
+        String nominalUlSql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_is_nominal_ruc_uchr.getPath(), iin_bin);
+        List<NominalRucUchr> nominalRucUchrs = jdbcTemplate.query(nominalUlSql, mapper::mapRowToNominalRucUch);
+        return !nominalRucUchrs.isEmpty();
+    }
+
+    public String getIinRucUch(String iin_bin) throws IOException {
+        validateIin(iin_bin);
+        String nominalUlSql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_is_nominal.getPath(), iin_bin);
+        List<NominalRucUchr> nominalRucUchrs = jdbcTemplate.query(nominalUlSql, mapper::mapRowToNominalRucUch);
+
+        if (nominalRucUchrs.isEmpty()) {
+            return null;
+        }
+        StringBuilder result = new StringBuilder();
+        for (NominalRucUchr nominalRucUchr : nominalRucUchrs) {
+            result.append(nominalRucUchr.getRol()).append(": ").append(nominalRucUchr.getRuc_uch_iin()).append("\n");
+        }
+        return result.toString();
     }
 }
