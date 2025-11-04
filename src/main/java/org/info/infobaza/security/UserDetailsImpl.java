@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Getter
 @Setter
 @NoArgsConstructor
@@ -48,6 +50,15 @@ public class UserDetailsImpl implements UserDetails {
                 authorities
         );
     }
+    public User getUserEntity() {
+        User user = new User();
+        user.setId(this.id);
+        user.setUsername(this.username);
+        user.setEmail(this.email);
+        user.setActive(this.active);
+        user.setPassword(this.password);
+        return user;
+    }
 
     @Override
     public boolean isAccountNonExpired() {
@@ -79,5 +90,10 @@ public class UserDetailsImpl implements UserDetails {
     @Override
     public int hashCode() {
         return Objects.hash(id);
+    }
+
+    public boolean isAdmin(){
+        return getAuthorities().stream()
+                .anyMatch(auth -> auth.getAuthority().equals("ADMIN"));
     }
 }

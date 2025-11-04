@@ -3,12 +3,14 @@ package org.info.infobaza.model.info.active_income;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 
 @Data
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode
 public class ESFInformationRecordDt implements RecordDt {
     private String iin_bin;
     private String name;

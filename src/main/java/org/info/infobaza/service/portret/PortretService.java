@@ -14,17 +14,21 @@ import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.model.info.active_income.NaoConRecordDt;
 import org.info.infobaza.model.info.job.CompanyRecord;
+import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.model.info.person.DossierPerson;
 import org.info.infobaza.model.info.person.PersonRecord;
 import org.info.infobaza.model.info.person.nominal.Nominal;
 import org.info.infobaza.model.info.person.nominal.NominalRucUchr;
 import org.info.infobaza.security.jwt.JwtTokenUtil;
 import org.info.infobaza.service.cars.CarService;
+import org.info.infobaza.service.enpf.HeadService;
 import org.info.infobaza.service.nao_con.NaoConService;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.util.convert.NumberConverter;
 import org.info.infobaza.util.convert.SQLFileUtil;
 import org.info.infobaza.util.date.DateUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -33,10 +37,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.time.LocalDate;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.info.infobaza.util.convert.IinChecker.isUl;
 
@@ -51,13 +53,14 @@ public class PortretService {
     private final Mapper mapper;
     private final RestTemplate restTemplate;
     private final JwtTokenUtil jwtTokenUtil;
+    private HeadService headService;
     private final NumberConverter numberConverter;
-
-    private final NaoConService naoConService;
-    private final CarService carService;
-
-
     private static final String IIN_PATTERN = "\\d{12}";
+
+    @Autowired
+    public void setHeadService(@Lazy HeadService headService) {
+        this.headService = headService;
+    }
 
     @Data
     private static class FetchResult {
@@ -69,19 +72,21 @@ public class PortretService {
 
     public Person getPerson(String iin) throws IOException {
         validateIin(iin);
-        log.info("Fetching person portrait for IIN: {}", iin);
+        log.info("🧠 Fetching person portrait for IIN: {}", iin);
 
         FetchResult fetchResult = fetchEntityData(iin);
-        String fullName = fetchResult.getFullName() != null ? fetchResult.getFullName() : "Не найдено в базе данных";
+
+        String fullName = fetchResult.getFullName() != null
+                ? fetchResult.getFullName()
+                : "Не найдено в базе данных";
         Age age = fetchResult.getAge();
         String photo = fetchResult.getPhoto();
 
-        // Fetch portret data for status
         List<String> portrets = fetchPortrets(iin);
         List<String> status = determineStatus(age, portrets);
         boolean turnover = fetchTurnover(iin);
-
-
+        boolean nominal = isNominal(iin);
+        boolean nominalUl = isNominalUl(iin);
         return new Person(
                 fullName,
                 age != null ? age.getAge() : 0,
@@ -89,11 +94,11 @@ public class PortretService {
                 photo,
                 status,
                 turnover,
-                isNominal(iin),
-                isNominalUl(iin),
-                isUl(iin) ? getIinRucUch(iin) : null
+                nominal,
+                nominalUl
         );
     }
+
 
     public IinInfo getIinInfo(String iin) throws IOException {
         validateIin(iin);
@@ -181,6 +186,13 @@ public class PortretService {
             return result;
         }
 
+        String companyNameRucUchr = fetchFIO_UL_RUC_UHCR(iin);
+        if(companyNameRucUchr != null && !companyNameRucUchr.trim().isEmpty()){
+            result.setFullName(companyNameRucUchr);
+            result.setType("COMPANY");
+            log.info("Fetched company name '{}' from fetchFIO_UL_RUC_UCHR for IIN: {}", companyName, iin);
+            return result;
+        }
         return result;
     }
 
@@ -202,7 +214,7 @@ public class PortretService {
         try {
             String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Turnover_turnover.getPath(), iin);
             List<String> turnovers = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("iin_bin"));
-            return turnovers.stream().anyMatch(x -> x.equals(iin));
+            return !turnovers.isEmpty();
         } catch (Exception e) {
             log.error("Error fetching turnover data for IIN: {}", iin, e);
             return false;
@@ -372,6 +384,11 @@ public class PortretService {
         }
     }
 
+    public String fetchFIO_UL_RUC_UHCR(String bin) throws IOException {
+        validateIin(bin);
+        List<SupervisorRecord> supervisorRecords = headService.getUlType(bin);
+        return supervisorRecords.stream().filter(x -> x.getTaxpayer_iin_bin().equals(bin)).map(SupervisorRecord::getTaxpayerName).findAny().orElse(null);
+    }
     public Age fetchAge(String iin) {
         if (iin == null || iin.trim().isEmpty()) {
             log.warn("IIN is null or empty, cannot fetch FIO");
@@ -420,21 +437,11 @@ public class PortretService {
         validateIin(iin_bin);
         String nominalUlSql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_is_nominal_ruc_uchr.getPath(), iin_bin);
         List<NominalRucUchr> nominalRucUchrs = jdbcTemplate.query(nominalUlSql, mapper::mapRowToNominalRucUch);
-        return !nominalRucUchrs.isEmpty();
-    }
-
-    public String getIinRucUch(String iin_bin) throws IOException {
-        validateIin(iin_bin);
-        String nominalUlSql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_is_nominal.getPath(), iin_bin);
-        List<NominalRucUchr> nominalRucUchrs = jdbcTemplate.query(nominalUlSql, mapper::mapRowToNominalRucUch);
-
         if (nominalRucUchrs.isEmpty()) {
-            return null;
+            String nominalUlSql1 = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_is_nominal.getPath(), iin_bin);
+            List<NominalRucUchr> nominalRucUchrs1 = jdbcTemplate.query(nominalUlSql1, mapper::mapRowToNominalRucUch);
+            return !nominalRucUchrs1.isEmpty();
         }
-        StringBuilder result = new StringBuilder();
-        for (NominalRucUchr nominalRucUchr : nominalRucUchrs) {
-            result.append(nominalRucUchr.getRol()).append(": ").append(nominalRucUchr.getRuc_uch_iin()).append("\n");
-        }
-        return result.toString();
+        return true;
     }
 }

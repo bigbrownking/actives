@@ -25,12 +25,6 @@ public class Log {
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Column(name = "action_type", nullable = false, length = 100)
-    private String actionType;
-
-    @Column(name = "metadata")
-    private String metadata;
-
     @Column(name = "obwii")
     private String obwii;
 

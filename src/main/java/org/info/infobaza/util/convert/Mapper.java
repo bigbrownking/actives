@@ -1,5 +1,6 @@
 package org.info.infobaza.util.convert;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.model.info.active_income.*;
 import org.info.infobaza.model.info.job.*;
@@ -15,17 +16,18 @@ import org.springframework.stereotype.Component;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class Mapper {
     private final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.ROOT);
-
+    private final NumberConverter numberConverter;
 
     public RelationRecord mapRowToSecRelation(ResultSet rs, int rowNum) {
         try {
@@ -52,8 +54,16 @@ public class Mapper {
 
                         if ((vid.equals("Поступили ДС") || vid.equals("Перечислил ДС")) && columnName.equals("col1"))
                             key = "Operation date";
-                        if ((vid.equals("Поступили ДС") || vid.equals("Перечислил ДС")) && columnName.equals("col2"))
+                        if ((vid.equals("Поступили ДС") || vid.equals("Перечислил ДС")) && columnName.equals("col2")) {
+                            String[] values = value.split("\\|");
+
+                            value = Arrays.stream(values)
+                                    .map(String::trim)
+                                    .map(numberConverter::formatNumber)
+                                    .collect(Collectors.joining("| "));
+
                             key = "Operation summ";
+                        }
                         if ((vid.equals("Поступили ДС") || vid.equals("Перечислил ДС")) && columnName.equals("col3"))
                             key = "Operation name";
 

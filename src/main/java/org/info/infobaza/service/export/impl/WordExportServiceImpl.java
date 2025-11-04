@@ -15,8 +15,6 @@ import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.model.info.active_income.NaoConRecordDt;
 import org.info.infobaza.model.info.active_income.RecordDt;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
-import org.info.infobaza.model.info.job.CompanyRecord;
-import org.info.infobaza.model.info.job.PenaltyRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.model.info.job.TurnoverRecord;
 import org.info.infobaza.service.Analyzer;
@@ -455,29 +453,6 @@ public class WordExportServiceImpl implements WordExportService {
                 setTableCell(row.getCell(2), supervisor.getTaxpayer_iin_bin() != null ? supervisor.getTaxpayer_iin_bin() : "-", false);
                // setTableCell(row.getCell(3), supervisor.getTaxpayerType() != null ? supervisor.getTaxpayerType() : "-", false);
                 setTableCell(row.getCell(4), supervisor.getTaxpayerName() != null ? supervisor.getTaxpayerName() : "-", false);
-            }
-        }
-
-        if (head.getOked() != null && !head.getOked().isEmpty()) {
-            addBoldParagraph(document, "Компании:");
-            XWPFTable table = document.createTable(head.getOked().size() + 1, 5);
-            table.setWidth("100%");
-
-            XWPFTableRow headerRow = table.getRow(0);
-            setTableCell(headerRow.getCell(0), "Русское название", true);
-            setTableCell(headerRow.getCell(1), "Оригинальное название", true);
-            setTableCell(headerRow.getCell(2), "БИН", true);
-            setTableCell(headerRow.getCell(3), "Дата регистрации", true);
-            setTableCell(headerRow.getCell(4), "Телефон", true);
-
-            int rowIndex = 1;
-            for (CompanyRecord company : head.getOked()) {
-                XWPFTableRow row = table.getRow(rowIndex++);
-                setTableCell(row.getCell(0), company.getRusName() != null ? company.getRusName() : "-", false);
-                setTableCell(row.getCell(1), company.getOrigName() != null ? company.getOrigName() : "-", false);
-                setTableCell(row.getCell(2), company.getBin() != null ? company.getBin() : "-", false);
-                setTableCell(row.getCell(3), company.getDateReg() != null ? company.getDateReg().toString() : "-", false);
-                setTableCell(row.getCell(4), company.getTelephone() != null ? company.getTelephone() : "-", false);
             }
         }
 

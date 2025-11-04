@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.model.dossier.User;
 import org.info.infobaza.repository.dossier.UserDossierRepository;
+import org.info.infobaza.repository.main.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -15,12 +16,14 @@ import java.security.PublicKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class JwtTokenUtil {
     private final UserDossierRepository userRepository;
+    private final UserRepository userMainRepository;
 
     @Value("${jwt.public.key}")
     private String publicKeyPEM;
@@ -46,48 +49,61 @@ public class JwtTokenUtil {
     }
 
     public String getUserNameFromJwtToken(String token) {
-        String username;
+        if (token == null || token.isEmpty()) {
+            log.warn("JWT token is null or empty");
+            return null;
+        }
 
+        // 1️⃣ Try RS256 first
         try {
-            username = Jwts.parser()
+            String username = Jwts.parser()
                     .setSigningKey(getPublicKey())
                     .build()
                     .parseClaimsJws(token)
                     .getBody()
                     .getSubject();
 
-            log.debug("Successfully parsed token as SSO token");
+            log.debug("Successfully parsed token as SSO (RS256) token");
             return username;
-
-        } catch (Exception ssoException) {
-            log.error("Failed to parse token as both regular JWT and SSO token. Regular JWT error: {}, SSO error: {}",
-                    ssoException.getMessage(), ssoException.getMessage());
-            return "";
+        } catch (Exception ignored) {
         }
-    }
 
-
-    public boolean validateSSOToken(String token) {
+        // 2️⃣ Try HS256 next
         try {
-            Jwts.parser()
-                    .setSigningKey(getPublicKey())
+            String username = Jwts.parser()
+                    .setSigningKey(getSigningKey())
                     .build()
                     .parseClaimsJws(token)
-                    .getBody();
-            return true;
-        } catch (SignatureException e) {
-            log.error("Invalid JWT signature: {}", e.getMessage());
-        } catch (MalformedJwtException e) {
-            log.error("Invalid JWT token: {}", e.getMessage());
-        } catch (ExpiredJwtException e) {
-            log.error("JWT token is expired: {}", e.getMessage());
-        } catch (UnsupportedJwtException e) {
-            log.error("JWT token is unsupported: {}", e.getMessage());
-        } catch (IllegalArgumentException e) {
-            log.error("JWT claims string is empty: {}", e.getMessage());
+                    .getBody()
+                    .getSubject();
+
+            log.debug("Successfully parsed token as HS256 token");
+            return username;
+        } catch (Exception hsEx) {
+            log.error("Failed to parse token as both RS256 and HS256. HS256 error: {}", hsEx.getMessage());
+            return null;
         }
-        return false;
     }
+
+
+
+    public boolean validateToken(String token) {
+        try {
+            // Try RSA first
+            Jwts.parser().setSigningKey(getPublicKey()).build().parseClaimsJws(token);
+            return true;
+        } catch (Exception rsaEx) {
+            // Then try HS256
+            try {
+                Jwts.parser().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
+                return true;
+            } catch (Exception hsEx) {
+                log.error("Invalid JWT: {}", hsEx.getMessage());
+                return false;
+            }
+        }
+    }
+
 
     public String getTokenFromCookie(HttpServletRequest request, String cookieName) {
         String cookieHeader = request.getHeader("Cookie");
@@ -134,4 +150,26 @@ public class JwtTokenUtil {
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
+
+//    public String generateTokenFromUsername(String username) {
+//        Optional<org.info.infobaza.model.main.User> user = userMainRepository.findByUsername(username);
+//        if (user.isEmpty()) {
+//            log.error("User not found for username: {}", username);
+//            throw new IllegalArgumentException("User not found: " + username);
+//        }
+//
+//        Date now = new Date();
+//        Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
+//
+//        return Jwts.builder()
+//                .setHeader(header)
+//                .setSubject(username)
+//                .claim("user_id", user.get().getId())
+//                .claim("token_type", "access")
+//                .setIssuedAt(now)
+//                .setExpiration(expiryDate)
+//                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+//                .compact();
+//    }
+
 }

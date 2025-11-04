@@ -11,5 +11,6 @@ import java.util.List;
 @Data
 @Builder
 public class CarPortret implements CarResponse{
+   private List<CarInfo> cars;
    private List<CarPortretPiece> portrets;
 }

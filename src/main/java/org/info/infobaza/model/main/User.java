@@ -3,11 +3,13 @@ package org.info.infobaza.model.main;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
+@Slf4j
 @Getter
 @Setter
 @Entity

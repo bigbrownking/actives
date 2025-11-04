@@ -25,7 +25,7 @@ public class UserConverter {
     private final String email = "@afm.gov.kz";
     private final String emailPrefix = "ser_";
 
-    public User fromSerToItap(UserSer userSer) {
+    public User fromSerToActive(UserSer userSer) {
         Role role = roleRepository.findByName("USER").orElseThrow(() -> new IllegalStateException("Role not found"));
         Set<Role> roles = new HashSet<>();
         roles.add(role);
@@ -51,7 +51,7 @@ public class UserConverter {
                     continue;
                 }
 
-                User converted = fromSerToItap(userSer);
+                User converted = fromSerToActive(userSer);
                 Optional<User> existing = userRepository.findByUsername(converted.getUsername());
 
                 if (existing.isPresent()) {

@@ -1,5 +1,6 @@
 package org.info.infobaza.service;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.constants.Dictionary;
@@ -15,7 +16,6 @@ import org.info.infobaza.dto.response.info.yearlyCounts.YearlyCount;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyRecordCounts;
 import org.info.infobaza.dto.response.relation.RelationActive;
 import org.info.infobaza.model.info.active_income.*;
-import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.model.info.person.RelationRecord;
 import org.info.infobaza.service.enpf.HeadService;
 import org.info.infobaza.service.nao_con.NaoConService;
@@ -27,6 +27,7 @@ import org.info.infobaza.util.convert.SQLFileUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -57,24 +58,31 @@ public class Analyzer {
     private final SQLFileUtil sqlFileUtil;
     private final NumberConverter numberConverter;
     private final NaoConService naoConService;
-
+    private final Map<String, String> iinToFioCache = new ConcurrentHashMap<>();
     @Autowired
     public void setHeadService(@Lazy HeadService headService) {
         this.headService = headService;
     }
-
-    private static final Map<Method, InformationalService> methodToServiceCache = new ConcurrentHashMap<>();
-
-    static {
-        for (InformationalService service : Dictionary.getServiceBeans().values()) {
-            for (Method method : service.getClass().getDeclaredMethods()) {
-                if (method.getAnnotation(ServiceMetadata.class) != null) {
-                    methodToServiceCache.put(method, service);
-                }
-            }
-        }
+    public void clearCaches() {
+        int size = iinToFioCache.size();
+        iinToFioCache.clear();
+        log.info("Кэш IIN→ФИО очищен (было {} записей)", size);
     }
+    public String getFioByIin(String iin) {
+        if (iin == null || iin.isBlank()) return "Unknown";
 
+        return iinToFioCache.computeIfAbsent(iin, key -> {
+            try {
+                IinInfo iinInfo = portretService.getIinInfo(key);
+                String name = iinInfo != null ? iinInfo.getName() : "Unknown";
+                log.info("Кэшировано ФИО для IIN {}: {}", key, name);
+                return name;
+            } catch (IOException e) {
+                log.warn("Не удалось получить ФИО для IIN {}: {}", key, e.getMessage());
+                return "Unknown";
+            }
+        });
+    }
     private Map<String, List<String>> fetchRelationsForMainIin(String mainIin) {
         try {
             String primarySql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Связи_Семейные.getPath(), mainIin);
@@ -128,10 +136,8 @@ public class Analyzer {
         if (relationRecord == null) return null;
 
         String iin = relationRecord.getIin_2();
-        IinInfo iinInfo = portretService.getIinInfo(iin);
         Double totalActives = calculateTotalActivesForPerson(iin, dateFrom, dateTo);
         Double totalIncomes = calculateTotalIncomeByIIN(iin, dateFrom, dateTo);
-        List<SupervisorRecord> head = headService.getType(iin);
         Map<String, String> dopinfo = relationRecord.getDopinfo();
         dopinfo.put("vid_sviazi", relationRecord.getVid_sviazi());
         int level = relationRecord.getLevel_rod();
@@ -140,7 +146,7 @@ public class Analyzer {
         }
         return RelationActive.builder()
                 .relation(relationRecord.getStatus())
-                .fio(iinInfo != null ? iinInfo.getName() : "Unknown")
+                .fio(getFioByIin(iin))
                 .iin(iin)
                 .actives(totalActives != null ? numberConverter.formatNumber(totalActives) : "0")
                 .incomes(totalIncomes != null ? numberConverter.formatNumber(totalIncomes) : "0")
@@ -193,7 +199,8 @@ public class Analyzer {
         processRecords(involvedIins, dateFrom, dateTo, years, targetSources, vids, types,
                 allInfoRecords, allEsfRecords, naoConRecordDs, true);
 
-        ActiveResponse activeResult = toActive(keepDistinctInfo(allInfoRecords),
+        log.info("ALL INFO: {}", allInfoRecords.toArray());
+        ActiveResponse activeResult = toActive((allInfoRecords),
                 keepDistinctEsf(allEsfRecords), keepDistinctNao(naoConRecordDs),
                 dateFrom, dateTo, years, involvedIins);
         setIinToRelation(activeResult, filteredIinToRelation);
@@ -230,7 +237,7 @@ public class Analyzer {
         List<String> effectiveYears = years != null && !years.isEmpty() ? years : List.of("");
 
         String mainIin = iins.get(0);
-        iins.parallelStream().forEach(currentIin -> {
+        iins.forEach(currentIin -> {
             boolean isUl = IinChecker.isUl(currentIin);
             for (String year : effectiveYears) {
                 String effectiveDateFrom = year.isEmpty() ? dateFrom : year + "-01-01";
@@ -249,7 +256,10 @@ public class Analyzer {
                             if (types != null && !types.isEmpty() && Arrays.stream(metadata.type()).noneMatch(types::contains))
                                 continue;
 
-                            InformationalService service = methodToServiceCache.get(method);
+                            InformationalService service = Dictionary.getServiceBeans().values().stream()
+                                    .filter(s -> s.getClass().equals(method.getDeclaringClass()))
+                                    .findFirst()
+                                    .orElse(null);
                             if (service == null) {
                                 log.error("Service not found for method {}", method.getName());
                                 continue;
@@ -260,21 +270,34 @@ public class Analyzer {
                                 if (result instanceof List<?> resultList && !resultList.isEmpty()) {
                                     Object first = resultList.get(0);
                                     if (isActive && first instanceof ESFInformationRecordDt) {
-                                        List<ESFInformationRecordDt> filteredRecords = isUl
-                                                ? resultList.stream()
-                                                .map(ESFInformationRecordDt.class::cast)
-                                                .filter(record -> (currentIin.equals(record.getIin_bin_pokup()) && mainIin.equals(record.getIin_bin_prod())) ||
-                                                        (currentIin.equals(record.getIin_bin_prod()) && mainIin.equals(record.getIin_bin_pokup())))
-                                                .toList()
-                                                : resultList.stream().map(ESFInformationRecordDt.class::cast).toList();
-                                        log.debug("ESF records for iin={}, isUl={}: {} records before filter, {} after",
-                                                currentIin, isUl, resultList.size(), filteredRecords.size());
+                                        List<ESFInformationRecordDt> filteredRecords;
+
+                                        if (!isUl || mainIin.equals(currentIin)) {
+                                            filteredRecords = resultList.stream()
+                                                    .map(ESFInformationRecordDt.class::cast)
+                                                    .toList();
+                                            log.info("ESF: iin={} (isUl={}, main==current={}) → TAKING ALL {} records",
+                                                    currentIin, isUl, mainIin.equals(currentIin), resultList.size());
+                                        } else {
+                                            filteredRecords = resultList.stream()
+                                                    .map(ESFInformationRecordDt.class::cast)
+                                                    .filter(record ->
+                                                            (currentIin.equals(record.getIin_bin_pokup()) && mainIin.equals(record.getIin_bin_prod())) ||
+                                                                    (currentIin.equals(record.getIin_bin_prod()) && mainIin.equals(record.getIin_bin_pokup())))
+                                                    .toList();
+                                            log.info("ESF: iin={} (isUl={}, main!=current) → filtered: {} → {}",
+                                                    currentIin, isUl, resultList.size(), filteredRecords.size());
+                                        }
+
                                         synchronized (esfRecords) {
+                                            int before = esfRecords.size();
                                             esfRecords.addAll(filteredRecords);
+                                            log.info("ESF list: {} → {} (added {})", before, esfRecords.size(), filteredRecords.size());
                                         }
                                     } else if (first instanceof InformationRecordDt) {
                                         synchronized (infoRecords) {
                                             infoRecords.addAll((List<InformationRecordDt>) resultList);
+                                            log.info("SIZE INFO: {}", infoRecords.size());
                                         }
                                     } else if (first instanceof NaoConRecordDt) {
                                         List<NaoConRecordDt> filteredRecords = isUl
@@ -331,23 +354,16 @@ public class Analyzer {
             return buildOverallIncome(filteredRecords, dateFrom, dateTo, years, iins);
         } else {
             List<RecordDt> recordsByYear = filteredRecords.stream()
-                    .map(record -> {
-                        try {
-                            return InformationRecordDt.builder()
-                                    .iin_bin(record.getIin_bin())
-                                    .name(portretService.getIinInfo(record.getIin_bin()).getName())
-                                    .date(record.getDate())
-                                    .database(record.getDatabase())
-                                    .oper(record.getOper())
-                                    .aktivy(record.getAktivy())
-                                    .dopinfo(record.getDopinfo())
-                                    .summ(record.getSumm() != null ? numberConverter.formatNumber(record.getSumm()) : null)
-                                    .build();
-                        } catch (IOException e) {
-                            log.error("oops....");
-                        }
-                        return null;
-                    })
+                    .map(record -> InformationRecordDt.builder()
+                            .iin_bin(record.getIin_bin())
+                            .name(getFioByIin(record.getIin_bin()))
+                            .date(record.getDate())
+                            .database(record.getDatabase())
+                            .oper(record.getOper())
+                            .aktivy(record.getAktivy())
+                            .dopinfo(record.getDopinfo())
+                            .summ(record.getSumm() != null ? numberConverter.formatNumber(record.getSumm()) : null)
+                            .build())
                     .collect(Collectors.toList());
 
             return IncomeWithRecords.builder()
@@ -417,12 +433,8 @@ public class Analyzer {
 
         Map<String, String> iinToFio = new HashMap<>(uniqueIins.size());
         uniqueIins.forEach(iin -> {
-            IinInfo iinInfo = null;
-            try {
-                iinInfo = portretService.getIinInfo(iin);
-            } catch (IOException e) {
-            }
-            iinToFio.put(iin, iinInfo != null ? iinInfo.getName() : "Unknown");
+            String  fio = getFioByIin(iin);
+            iinToFio.put(iin, fio);
         });
         return iinToFio;
     }
@@ -746,12 +758,8 @@ public class Analyzer {
 
         Map<String, String> iinToFio = new HashMap<>(uniqueIins.size());
         uniqueIins.forEach(iin -> {
-            IinInfo iinInfo = null;
-            try {
-                iinInfo = portretService.getIinInfo(iin);
-            } catch (IOException e) {
-            }
-            iinToFio.put(iin, iinInfo != null ? iinInfo.getName() : "Unknown");
+            String fio = getFioByIin(iin);
+            iinToFio.put(iin, fio);
         });
         return iinToFio;
     }
@@ -785,62 +793,50 @@ public class Analyzer {
         return records.stream()
                 .map(record -> {
                     if (record instanceof InformationRecordDt info) {
-                        try {
-                            return InformationRecordDt.builder()
-                                    .iin_bin(info.getIin_bin())
-                                    .name(portretService.getIinInfo(info.getIin_bin()).getName())
-                                    .date(info.getDate())
-                                    .aktivy(info.getAktivy())
-                                    .database(info.getDatabase())
-                                    .oper(info.getOper())
-                                    .dopinfo(info.getDopinfo())
-                                    .summ(info.getSumm() != null ? numberConverter.formatNumber(info.getSumm()) : null)
-                                    .build();
-                        } catch (IOException e) {
-                            log.error("Error formatting InformationRecordDt: {}", e.getMessage());
-                        }
+                        return InformationRecordDt.builder()
+                                .iin_bin(info.getIin_bin())
+                                .name(getFioByIin(info.getIin_bin()))
+                                .date(info.getDate())
+                                .aktivy(info.getAktivy())
+                                .database(info.getDatabase())
+                                .oper(info.getOper())
+                                .dopinfo(info.getDopinfo())
+                                .summ(info.getSumm() != null ? numberConverter.formatNumber(info.getSumm()) : null)
+                                .build();
                     } else if (record instanceof ESFInformationRecordDt esf) {
-                        try {
-                            return ESFInformationRecordDt.builder()
-                                    .iin_bin(esf.getIin_bin())
-                                    .name(portretService.getIinInfo(esf.getIin_bin()).getName())
-                                    .iin_bin_pokup(esf.getIin_bin_pokup())
-                                    .iin_bin_prod(esf.getIin_bin_prod())
-                                    .date(esf.getDate())
-                                    .aktivy(esf.getAktivy())
-                                    .database(esf.getDatabase())
-                                    .oper(esf.getOper())
-                                    .dopinfo(esf.getDopinfo())
-                                    .num_doc(esf.getNum_doc())
-                                    .summ(esf.getSumm() != null ? numberConverter.formatNumber(esf.getSumm()) : null)
-                                    .build();
-                        } catch (IOException e) {
-                            log.error("Error formatting ESFInformationRecordDt: {}", e.getMessage());
-                        }
+                        return ESFInformationRecordDt.builder()
+                                .iin_bin(esf.getIin_bin())
+                                .name(getFioByIin(esf.getIin_bin()))
+                                .iin_bin_pokup(esf.getIin_bin_pokup())
+                                .iin_bin_prod(esf.getIin_bin_prod())
+                                .date(esf.getDate())
+                                .aktivy(esf.getAktivy())
+                                .database(esf.getDatabase())
+                                .oper(esf.getOper())
+                                .dopinfo(esf.getDopinfo())
+                                .num_doc(esf.getNum_doc())
+                                .summ(esf.getSumm() != null ? numberConverter.formatNumber(esf.getSumm()) : null)
+                                .build();
                     }else if (record instanceof NaoConRecordDt nao) {
-                        try {
-                            return NaoConRecordDt.builder()
-                                    .iin_bin(nao.getIin_bin())
-                                    .name(portretService.getIinInfo(nao.getIin_bin()).getName())
-                                    .iin_bin_pokup(nao.getIin_bin_pokup())
-                                    .iin_bin_prod(nao.getIin_bin_prod())
-                                    .date(nao.getDate())
-                                    .aktivy(nao.getAktivy())
-                                    .database(nao.getDatabase())
-                                    .oper(nao.getOper())
-                                    .dopinfo(nao.getDopinfo())
-                                    .num_doc(nao.getNum_doc())
-                                    .vid_ned(nao.getVid_ned())
-                                    .podrod_vid_ned(nao.getPodrod_vid_ned())
-                                    .kd_fixed(nao.getKd_fixed())
-                                    .rka(nao.getRka())
-                                    .address(nao.getAddress())
-                                    .obshaya_ploshad(nao.getObshaya_ploshad())
-                                    .summ(nao.getSumm() != null ? numberConverter.formatNumber(nao.getSumm()) : null)
-                                    .build();
-                        } catch (IOException e) {
-                            log.error("Error formatting ESFInformationRecordDt: {}", e.getMessage());
-                        }
+                        return NaoConRecordDt.builder()
+                                .iin_bin(nao.getIin_bin())
+                                .name(getFioByIin(nao.getIin_bin()))
+                                .iin_bin_pokup(nao.getIin_bin_pokup())
+                                .iin_bin_prod(nao.getIin_bin_prod())
+                                .date(nao.getDate())
+                                .aktivy(nao.getAktivy())
+                                .database(nao.getDatabase())
+                                .oper(nao.getOper())
+                                .dopinfo(nao.getDopinfo())
+                                .num_doc(nao.getNum_doc())
+                                .vid_ned(nao.getVid_ned())
+                                .podrod_vid_ned(nao.getPodrod_vid_ned())
+                                .kd_fixed(nao.getKd_fixed())
+                                .rka(nao.getRka())
+                                .address(nao.getAddress())
+                                .obshaya_ploshad(nao.getObshaya_ploshad())
+                                .summ(nao.getSumm() != null ? numberConverter.formatNumber(nao.getSumm()) : null)
+                                .build();
                     }
 
                     return record;

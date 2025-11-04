@@ -18,7 +18,6 @@ public class HousePortretPiece {
     private Boolean isCryptoActive;
     private Boolean isNominal;
     private Boolean isNominalUl;
-    private String iinRukUch;
 
     private LocalDate date;
     private boolean buy;
@@ -32,6 +31,5 @@ public class HousePortretPiece {
         this.isCryptoActive = person.getIsCryptoActive();
         this.isNominal = person.getIsNominal();
         this.isNominalUl = person.getIsNominalUl();
-        this.iinRukUch = person.getIinRukUch();
     }
 }

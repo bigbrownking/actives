@@ -16,13 +16,10 @@ import org.info.infobaza.dto.response.job.Pension;
 import org.info.infobaza.dto.response.person.Person;
 import org.info.infobaza.dto.response.relation.RelationActive;
 import org.info.infobaza.dto.response.relation.RelationActiveWithTypes;
-import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
 import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.model.info.active_income.NaoConRecordDt;
 import org.info.infobaza.model.info.active_income.RecordDt;
-import org.info.infobaza.model.info.job.CompanyRecord;
-import org.info.infobaza.model.info.job.PenaltyRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.model.info.job.TurnoverRecord;
 import org.info.infobaza.service.Analyzer;
@@ -454,34 +451,6 @@ public class PdfExportServiceImpl implements PdfExportService {
 
             document.add(supervisorTable);
             log.debug("Added supervisor table");
-        }
-
-        // Add company information
-        if (head.getOked() != null && !head.getOked().isEmpty()) {
-            document.add(new Paragraph("Компании:", boldFont));
-
-            PdfPTable companyTable = new PdfPTable(5);
-            companyTable.setWidthPercentage(100);
-            companyTable.setWidths(new float[]{3, 3, 2, 1.5f, 2f});
-            companyTable.setSpacingBefore(5);
-            companyTable.setSpacingAfter(10);
-
-            addTableHeader(companyTable, "Русское название", boldFont);
-            addTableHeader(companyTable, "Оригинальное название", boldFont);
-            addTableHeader(companyTable, "БИН", boldFont);
-            addTableHeader(companyTable, "Дата регистрации", boldFont);
-            addTableHeader(companyTable, "Телефон", boldFont);
-
-            for (CompanyRecord company : head.getOked()) {
-                addTableCell(companyTable, company.getRusName() != null ? company.getRusName() : "-", font);
-                addTableCell(companyTable, company.getOrigName() != null ? company.getOrigName() : "-", font);
-                addTableCell(companyTable, company.getBin() != null ? company.getBin() : "-", font);
-                addTableCell(companyTable, company.getDateReg() != null ? company.getDateReg().toString() : "-", font);
-                addTableCell(companyTable, company.getTelephone() != null ? company.getTelephone() : "-", font);
-            }
-
-            document.add(companyTable);
-            log.debug("Added company table");
         }
 
         // Add financial summary

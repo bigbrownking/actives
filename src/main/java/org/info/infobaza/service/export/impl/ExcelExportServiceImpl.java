@@ -1,10 +1,10 @@
-
 package org.info.infobaza.service.export.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.ClientAnchor;
-import org.apache.poi.xssf.usermodel.*;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.info.infobaza.dto.request.ExportRequest;
 import org.info.infobaza.dto.request.MassExportRequest;
 import org.info.infobaza.dto.response.info.active.ActiveWithRecords;
@@ -15,17 +15,10 @@ import org.info.infobaza.dto.response.job.Pension;
 import org.info.infobaza.dto.response.person.Person;
 import org.info.infobaza.dto.response.relation.RelationActive;
 import org.info.infobaza.dto.response.relation.RelationActiveWithTypes;
-import org.info.infobaza.exception.NotFoundException;
 import org.info.infobaza.model.info.active_income.ESFInformationRecordDt;
-import org.info.infobaza.model.info.active_income.InformationRecordDt;
-import org.info.infobaza.model.info.active_income.NaoConRecordDt;
 import org.info.infobaza.model.info.active_income.RecordDt;
-import org.info.infobaza.model.info.job.CompanyRecord;
-import org.info.infobaza.model.info.job.PenaltyRecord;
-import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.model.info.job.TurnoverRecord;
 import org.info.infobaza.service.Analyzer;
-import org.info.infobaza.service.adm_shtraf.AdministrationPayService;
 import org.info.infobaza.service.enpf.ENPFService;
 import org.info.infobaza.service.enpf.HeadService;
 import org.info.infobaza.service.enpf.IndustrialService;
@@ -37,10 +30,9 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,54 +44,62 @@ public class ExcelExportServiceImpl implements ExcelExportService {
     private final RelationService relationService;
     private final HeadService headService;
     private final IndustrialService industrialService;
-    private final AdministrationPayService administrationPayService;
     private final ENPFService enpfService;
     private final Analyzer analyzer;
     private final DateUtil dateUtil;
 
     @Override
-    public void exportToExcel(OutputStream outputStream, ExportRequest request) throws IOException, NotFoundException {
+    public void exportToExcel(OutputStream outputStream, ExportRequest request) throws IOException {
+        long startTotal = System.currentTimeMillis();
+        log.info("Starting exportToExcel()...");
+
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-            XSSFSheet sheet = workbook.createSheet("Person Report");
+            Sheet sheet = workbook.createSheet("Person Report");
             int rowIndex = 0;
 
+            // === 1. Fetching request data ===
             String dateFrom = request.getDateFrom().toString();
             String dateTo = request.getDateTo().toString();
             String mainIin = request.getIin();
-            List<String> yearsActive = request.getYearsActive() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYearsActive();
-            List<String> yearsIncome = request.getYearsIncome() == null ? dateUtil.getYears(dateFrom, dateTo) : request.getYearsIncome();
+            List<String> yearsActive = request.getYearsActive() == null
+                    ? dateUtil.getYears(dateFrom, dateTo)
+                    : request.getYearsActive();
+            List<String> yearsIncome = request.getYearsIncome() == null
+                    ? dateUtil.getYears(dateFrom, dateTo)
+                    : request.getYearsIncome();
 
+            // === 2. Fetch primary relations for main IIN ===
             List<String> iinsToProcess = new ArrayList<>();
             iinsToProcess.add(mainIin);
 
-            // Fetch primary relations for the main IIN
             RelationActiveWithTypes primaryRelations = relationService.getPrimaryRelationsOfPerson(
                     mainIin, dateFrom, dateTo);
+
             if (primaryRelations != null && primaryRelations.getTypeToRelation() != null) {
                 iinsToProcess.addAll(
                         primaryRelations.getTypeToRelation().values().stream()
                                 .flatMap(List::stream)
                                 .map(RelationActive::getIin)
-                                .filter(x -> x != null && !x.isEmpty())
+                                .filter(Objects::nonNull)
+                                .filter(s -> !s.isBlank())
                                 .distinct()
                                 .toList()
                 );
             }
 
-            // Process each IIN
+            log.info("Processing {} IIN(s)...", iinsToProcess.size());
+
+            // === 3. Process each IIN ===
             for (int i = 0; i < iinsToProcess.size(); i++) {
                 String iin = iinsToProcess.get(i);
+                long tIinStart = System.currentTimeMillis();
 
-                // Add section header for the current IIN
                 rowIndex = addBoldRow(sheet, rowIndex, "Данные для ИИН: " + iin);
                 rowIndex++;
 
-                // Fetch data for the current IIN
                 Person person = portretService.getPerson(iin);
-                RelationActiveWithTypes personPrimaryRelations = relationService.getPrimaryRelationsOfPerson(
-                        iin, dateFrom, dateTo);
-                RelationActiveWithTypes personSecondaryRelations = relationService.getSecondaryRelationsOfPerson(
-                        iin, dateFrom, dateTo);
+                RelationActiveWithTypes personPrimaryRelations = relationService.getPrimaryRelationsOfPerson(iin, dateFrom, dateTo);
+                RelationActiveWithTypes personSecondaryRelations = relationService.getSecondaryRelationsOfPerson(iin, dateFrom, dateTo);
                 List<Pension> pensions = enpfService.getPension(iin, dateFrom, dateTo);
                 Head head = headService.constructHead(iin, dateFrom, dateTo);
                 Industry industry = industrialService.getIndustry(iin);
@@ -112,186 +112,194 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                         iin, dateFrom, dateTo, yearsIncome, request.getVids(), request.getSources(),
                         request.getIins());
 
-                // Add sections for this IIN
                 rowIndex = addPortraitSection(workbook, sheet, rowIndex, person);
                 rowIndex = addRelationsSection(sheet, rowIndex, personPrimaryRelations, personSecondaryRelations);
                 rowIndex = addActivesAndIncomesSection(sheet, rowIndex, activeResponse, incomeResponse);
                 rowIndex = addJobInformationSection(sheet, rowIndex, pensions, head, industry, turnoverRecords);
 
-                // Add blank row between IINs (except for the last one)
-                if (i < iinsToProcess.size() - 1) {
-                    rowIndex++;
-                }
+                if (i < iinsToProcess.size() - 1) rowIndex++;
+
+                log.info("Completed IIN {} in {} ms", iin, (System.currentTimeMillis() - tIinStart));
             }
 
-            // Auto-size columns
-            for (int i = 0; i < 9; i++) {
-                sheet.autoSizeColumn(i);
-            }
-
-            // Write to output stream
+            for (int i = 0; i < 9; i++) sheet.autoSizeColumn(i);
             workbook.write(outputStream);
         }
 
+        log.info("exportToExcel() finished in {} ms", (System.currentTimeMillis() - startTotal));
     }
 
+    // === В начало класса добавь ===
+    private static final String TIME_FORMAT = "⏱ [{}] took {} ms";
+    private static final String SECTION_START = "Starting {} for IIN: {}";
+    private static final String SECTION_END = "Completed {} for IIN: {} in {} ms";
+
+    // === В exportToExcelMass ===
     @Override
-    public void exportToExcelMass(OutputStream outputStream, MassExportRequest request) throws IOException, NotFoundException {
+    public void exportToExcelMass(OutputStream outputStream, MassExportRequest request) throws IOException {
+        long totalStart = System.currentTimeMillis();
         List<String> iins = request.getIins();
-        String dateFrom = "1980";
-        String dateTo = "2025";
-        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-            XSSFSheet sheet = workbook.createSheet("Person Report");
-            int rowIndex = 0;
-            for (String iinInput : iins) {
-                List<String> iinsToProcess = new ArrayList<>();
-                iinsToProcess.add(iinInput);
+        String dateFrom = "1980-01-01";
+        int endYear = LocalDate.now().getYear();
+        String dateTo = endYear + "-12-31";
+        List<String> yearsActive = dateUtil.getYears(dateFrom, dateTo);
+        List<String> yearsIncome = dateUtil.getYears(dateFrom, dateTo);
 
-                // Fetch primary relations for the main IIN
-                RelationActiveWithTypes primaryRelations = relationService.getPrimaryRelationsOfPerson(
-                        iinInput, dateFrom, dateTo);
-                if (primaryRelations != null && primaryRelations.getTypeToRelation() != null) {
-                    iinsToProcess.addAll(
-                            primaryRelations.getTypeToRelation().values().stream()
-                                    .flatMap(List::stream)
-                                    .map(RelationActive::getIin)
-                                    .filter(x -> x != null && !x.isEmpty())
-                                    .distinct()
-                                    .toList()
-                    );
-                }
+        log.info("Starting mass export for {} main IIN(s)", iins.size());
 
-                // Process each IIN
-                for (int i = 0; i < iinsToProcess.size(); i++) {
-                    String iin = iinsToProcess.get(i);
+        SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+        workbook.setCompressTempFiles(true);
+        Sheet sheet = workbook.createSheet("Person Report");
+        int rowIndex = 0;
+        Set<String> processedIINs = new HashSet<>();
 
-                    // Add section header for the current IIN
-                    rowIndex = addBoldRow(sheet, rowIndex, "Данные для ИИН: " + iin);
-                    rowIndex++;
-
-                    // Fetch data for the current IIN
-                    Person person = portretService.getPerson(iin);
-                    RelationActiveWithTypes personPrimaryRelations = relationService.getPrimaryRelationsOfPerson(
-                            iin, dateFrom, dateTo);
-                    RelationActiveWithTypes personSecondaryRelations = relationService.getSecondaryRelationsOfPerson(
-                            iin, dateFrom, dateTo);
-                    List<Pension> pensions = enpfService.getPension(iin, dateFrom, dateTo);
-                    Head head = headService.constructHead(iin, dateFrom, dateTo);
-                    Industry industry = industrialService.getIndustry(iin);
-                    List<TurnoverRecord> turnoverRecords = enpfService.getTurnoverRecords(iin);
-
-                    ActiveWithRecords activeResponse = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
-                            iin, dateFrom, dateTo, null, null, null,
-                            null, request.getIins());
-                    IncomeWithRecords incomeResponse = (IncomeWithRecords) analyzer.getAllIncomesOfPersonsByDates(
-                            iin, dateFrom, dateTo, null, null, null,
-                            request.getIins());
-
-                    // Add sections for this IIN
-                    rowIndex = addPortraitSection(workbook, sheet, rowIndex, person);
-                    rowIndex = addRelationsSection(sheet, rowIndex, personPrimaryRelations, personSecondaryRelations);
-                    rowIndex = addActivesAndIncomesSection(sheet, rowIndex, activeResponse, incomeResponse);
-                    rowIndex = addJobInformationSection(sheet, rowIndex, pensions, head, industry, turnoverRecords);
-
-                    // Add blank row between IINs (except for the last one)
-                    if (i < iinsToProcess.size() - 1) {
-                        rowIndex++;
-                    }
-                }
-
-                // Auto-size columns
-                for (int i = 0; i < 9; i++) {
-                    sheet.autoSizeColumn(i);
-                }
-
-                // Write to output stream
-                workbook.write(outputStream);
+        for (String iinInput : iins) {
+            if (!processedIINs.add(iinInput)) {
+                log.info("Skipping duplicate IIN: {}", iinInput);
+                continue;
             }
+
+            long iinInputStart = System.currentTimeMillis();
+            log.info("Processing main IIN: {}", iinInput);
+
+            // === 1. Получаем связи для основного IIN ===
+            List<String> iinsToProcess = new ArrayList<>();
+            iinsToProcess.add(iinInput);
+
+            long relStart = System.currentTimeMillis();
+            try {
+                RelationActiveWithTypes primaryRelations = relationService.getPrimaryRelationsOfPerson(iinInput, dateFrom, dateTo);
+                if (primaryRelations != null && primaryRelations.getTypeToRelation() != null) {
+                    List<String> relatedIins = primaryRelations.getTypeToRelation().values().stream()
+                            .flatMap(List::stream)
+                            .filter(x -> x.getLevel() == 1)
+                            .map(RelationActive::getIin)
+                            .filter(Objects::nonNull)
+                            .filter(s -> !s.isBlank())
+                            .distinct()
+                            .toList();
+                    iinsToProcess.addAll(relatedIins);
+                    log.info("Found {} related IINs for {}", relatedIins.size(), iinInput);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch relations for IIN {}: {}", iinInput, e.getMessage());
+            }
+            log.info(TIME_FORMAT, "Relations fetch", (System.currentTimeMillis() - relStart));
+
+            log.info("all iins: {}", iinsToProcess);
+            // === 2. Обрабатываем каждый IIN последовательно ===
+            for (String iin : iinsToProcess) {
+                if (!processedIINs.add(iin)) {
+                    log.info("Skipping already processed IIN: {}", iin);
+                    continue;
+                }
+
+                long iinStart = System.currentTimeMillis();
+                log.info("Starting data fetch for IIN: {}", iin);
+
+                // === Последовательные вызовы (как в exportToExcel) ===
+                Person person = portretService.getPerson(iin);
+                RelationActiveWithTypes primary = relationService.getPrimaryRelationsOfPerson(iin, dateFrom, dateTo);
+                RelationActiveWithTypes secondary = relationService.getSecondaryRelationsOfPerson(iin, dateFrom, dateTo);
+                List<Pension> pensions = enpfService.getPension(iin, dateFrom, dateTo);
+                Head headFl = headService.constructHead(iin, dateFrom, dateTo);
+                Industry industry = industrialService.getIndustry(iin);
+                List<TurnoverRecord> turnovers = enpfService.getTurnoverRecords(iin);
+                ActiveWithRecords actives = (ActiveWithRecords) analyzer.getAllActivesOfPersonsByDates(
+                        iin, dateFrom, dateTo, yearsActive, null, null, null, request.getIins());
+                IncomeWithRecords incomes = (IncomeWithRecords) analyzer.getAllIncomesOfPersonsByDates(
+                        iin, dateFrom, dateTo, yearsIncome, null, null, request.getIins());
+
+                long fetchEnd = System.currentTimeMillis();
+                log.info(TIME_FORMAT, "All data fetched", (fetchEnd - iinStart));
+
+                // === Запись в Excel ===
+                long writeStart = System.currentTimeMillis();
+                rowIndex = addBoldRow(sheet, rowIndex, "Данные для ИИН: " + iin);
+                rowIndex++;
+                rowIndex = addPortraitSection(workbook, sheet, rowIndex, person);
+                rowIndex = addRelationsSection(sheet, rowIndex, primary, secondary);
+                rowIndex = addActivesAndIncomesSection(sheet, rowIndex, actives, incomes);
+                rowIndex = addJobInformationSection(sheet, rowIndex, pensions, headFl, industry, turnovers);
+                rowIndex++;
+                log.info(TIME_FORMAT, "Excel write", (System.currentTimeMillis() - writeStart));
+
+                log.info("Completed IIN {} in {} ms", iin, (System.currentTimeMillis() - iinStart));
+            }
+
+            log.info("Completed main IIN {} in {} ms", iinInput, (System.currentTimeMillis() - iinInputStart));
         }
+
+        // === Финальная запись ===
+        long finalStart = System.currentTimeMillis();
+        for (int i = 0; i < 9; i++) {
+            sheet.setColumnWidth(i, 6000);
+        }
+        workbook.write(outputStream);
+        workbook.close();
+        workbook.dispose();
+        log.info(TIME_FORMAT, "Workbook write & dispose", (System.currentTimeMillis() - finalStart));
+
+        long totalTime = (System.currentTimeMillis() - totalStart) / 1000;
+        log.info("Mass export completed in {} seconds for {} unique IIN(s)", totalTime, processedIINs.size());
     }
 
-    private int addPortraitSection(XSSFWorkbook workbook, XSSFSheet sheet, int rowIndex, Person person) {
+    // === Универсальный метод с логами для CompletableFuture ===
+    private <T> CompletableFuture<T> logFuture(String name, String iin, ThrowingSupplier<T> supplier) {
+        long start = System.currentTimeMillis();
+        log.info(SECTION_START, name, iin);
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                T result = supplier.get();
+                log.info(SECTION_END, name, iin, (System.currentTimeMillis() - start));
+                return result;
+            } catch (Exception e) {
+                log.error("Failed {} for IIN {}: {}", name, iin, e.getMessage());
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    // === Функциональный интерфейс для исключений ===
+    @FunctionalInterface
+    private interface ThrowingSupplier<T> {
+        T get() throws IOException;
+    }
+
+    // ==================== УНИВЕРСАЛЬНЫЕ МЕТОДЫ ====================
+
+    private int addPortraitSection(Workbook workbook, Sheet sheet, int rowIndex, Person person) {
         rowIndex = addBoldRow(sheet, rowIndex, "Портрет");
 
-        // Person info and image
-        XSSFRow row = sheet.createRow(rowIndex++);
-        XSSFCell imageCell = row.createCell(0);
-        XSSFCell infoCell = row.createCell(1);
+        Row row = sheet.createRow(rowIndex++);
+        Cell infoCell = row.createCell(0);
 
-        // Add image
-        if (person.getImage() != null && !person.getImage().isEmpty()) {
-            try {
-                String imageString = person.getImage();
-                byte[] imageBytes;
-                int pictureType = XSSFWorkbook.PICTURE_TYPE_JPEG;
+        StringBuilder info = new StringBuilder();
+        info.append("ФИО: ").append(orDash(person.getFio())).append("\n");
+        info.append("Возраст: ").append(person.getAge() != 0 ? person.getAge() + " лет" : "Неизвестен").append("\n");
+        info.append("ИИН: ").append(orDash(person.getIin())).append("\n");
+        info.append("Портрет: ").append(person.getPortret() != null ? String.join(", ", person.getPortret()) : "Отсутствует").append("\n");
+        info.append("Номинал: ").append(person.getIsNominal() != null && person.getIsNominal() ? "Да" : "Нет").append("\n");
+        info.append("Крипта: ").append(person.getIsCryptoActive() ? "Есть" : "Нет");
 
-                if (imageString.contains(";")) {
-                    String[] imageParts = imageString.split(";");
-                    String mimeType = imageParts[0].replace("data:", "");
-                    String base64Data = imageParts[1].replace("base64,", "");
-                    imageBytes = Base64.getDecoder().decode(base64Data);
-
-                    if (mimeType.contains("png")) {
-                        pictureType = XSSFWorkbook.PICTURE_TYPE_PNG;
-                    } else if (!mimeType.contains("jpeg") && !mimeType.contains("jpg")) {
-                        throw new IllegalArgumentException("Unsupported image format: " + mimeType);
-                    }
-                } else {
-                    imageBytes = Base64.getDecoder().decode(imageString);
-                }
-
-                // Add image to workbook
-                int pictureIdx = workbook.addPicture(imageBytes, pictureType);
-                XSSFDrawing drawing = sheet.createDrawingPatriarch();
-                XSSFClientAnchor anchor = drawing.createAnchor(0, 0, 0, 0, 0, rowIndex - 1, 1, rowIndex);
-                anchor.setAnchorType(ClientAnchor.AnchorType.MOVE_AND_RESIZE);
-                XSSFPicture picture = drawing.createPicture(anchor, pictureIdx);
-                picture.resize(100.0 / 914400.0, 100.0 / 914400.0); // 100 pixels (1 pixel ≈ 9144 EMUs)
-            } catch (Exception e) {
-                log.error("Failed to add image to Excel document: ", e);
-                imageCell.setCellValue("");
-            }
-        } else {
-            imageCell.setCellValue("");
-        }
-
-        // Person info
-        StringBuilder infoText = new StringBuilder();
-        infoText.append("ФИО: ").append(person.getFio() != null ? person.getFio() : "-").append("\n");
-        infoText.append("Возраст: ").append(person.getAge() != 0 ? person.getAge() + " лет" : "Возраст неизвестен").append("\n");
-        infoText.append("ИИН: ").append(person.getIin() != null ? person.getIin() : "-").append("\n");
-        infoText.append("Портрет: ").append(person.getPortret() != null ? String.join(", ", person.getPortret()) : "Портрет отсутствует").append("\n");
-        infoText.append("Номинал: ").append(person.getIsNominal() != null && person.getIsNominal() ? "Номинал" : "Не номинал");
-        infoText.append("Крипта: ").append(person.getIsCryptoActive() ? "Есть переводы по криптовалюте" : "Нету переводов по криптовалюте");
-        infoCell.setCellValue(infoText.toString());
+        infoCell.setCellValue(info.toString());
 
         return rowIndex + 1;
     }
 
-    private int addRelationsSection(XSSFSheet sheet, int rowIndex, RelationActiveWithTypes primaryRelations,
-                                    RelationActiveWithTypes secondaryRelations) {
-        // Primary Relations
+    private int addRelationsSection(Sheet sheet, int rowIndex, RelationActiveWithTypes primary, RelationActiveWithTypes secondary) {
         rowIndex = addBoldRow(sheet, rowIndex, "Первичные связи:");
-        if (primaryRelations != null && primaryRelations.getTypeToRelation() != null && !primaryRelations.getTypeToRelation().isEmpty()) {
-            rowIndex = addRelationsTable(sheet, rowIndex, primaryRelations.getTypeToRelation());
-        } else {
-            rowIndex = addRow(sheet, rowIndex, "Нет первичных связей");
-        }
+        rowIndex = hasRelations(primary) ? addRelationsTable(sheet, rowIndex, primary.getTypeToRelation())
+                : addRow(sheet, rowIndex, "Нет первичных связей");
         rowIndex++;
 
-        // Secondary Relations
         rowIndex = addBoldRow(sheet, rowIndex, "Вторичные связи:");
-        if (secondaryRelations != null && secondaryRelations.getTypeToRelation() != null && !secondaryRelations.getTypeToRelation().isEmpty()) {
-            rowIndex = addRelationsTable(sheet, rowIndex, secondaryRelations.getTypeToRelation());
-        } else {
-            rowIndex = addRow(sheet, rowIndex, "Нет вторичных связей");
-        }
+        rowIndex = hasRelations(secondary) ? addRelationsTable(sheet, rowIndex, secondary.getTypeToRelation())
+                : addRow(sheet, rowIndex, "Нет вторичных связей");
         return rowIndex + 1;
     }
 
-    private int addRelationsTable(XSSFSheet sheet, int rowIndex, Map<String, List<RelationActive>> relationsMap) {
-        log.debug("Adding relations table to Excel sheet");
-
+    private int addRelationsTable(Sheet sheet, int rowIndex, Map<String, List<RelationActive>> relationsMap) {
         for (Map.Entry<String, List<RelationActive>> entry : relationsMap.entrySet()) {
             String category = entry.getKey();
             List<RelationActive> relations = entry.getValue();
@@ -299,360 +307,290 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             rowIndex = addBoldRow(sheet, rowIndex, category + ":");
 
             if (relations == null || relations.isEmpty()) {
-                rowIndex = addRow(sheet, rowIndex, "  Нет связей в данной категории");
-                rowIndex++;
-                log.debug("No relations in category: {}", category);
+                rowIndex = addRow(sheet, rowIndex, "  Нет связей");
                 continue;
             }
 
-            XSSFRow headerRow = sheet.createRow(rowIndex++);
-            setCell(headerRow, 0, "ФИО", true);
-            setCell(headerRow, 1, "Связь", true);
-            setCell(headerRow, 2, "ИИН", true);
-            setCell(headerRow, 3, "Активы", true);
-            setCell(headerRow, 4, "Доходы", true);
-            setCell(headerRow, 5, "Номинал", true);
-            setCell(headerRow, 6, "Доп Инфо", true);
+            Row header = sheet.createRow(rowIndex++);
+            setCell(header, 0, "ФИО", true);
+            setCell(header, 1, "Связь", true);
+            setCell(header, 2, "ИИН", true);
+            setCell(header, 3, "Активы", true);
+            setCell(header, 4, "Доходы", true);
+            setCell(header, 5, "Номинал", true);
+            setCell(header, 6, "Доп Инфо", true);
 
             for (RelationActive ra : relations) {
-                log.debug("Processing RelationActive for IIN: {}, dopinfo: {}", ra.getIin(), ra.getDopinfo());
-                XSSFRow row = sheet.createRow(rowIndex++);
-                setCell(row, 0, ra.getFio() != null ? ra.getFio() : "-", false);
-                setCell(row, 1, ra.getRelation() != null ? ra.getRelation() : "-", false);
-                setCell(row, 2, ra.getIin() != null ? ra.getIin() : "-", false);
-                setCell(row, 3, ra.getActives() != null ? ra.getActives() : "-", false);
-                setCell(row, 4, ra.getIncomes() != null ? ra.getIncomes() : "-", false);
-                setCell(row, 5, ra.isNominal() ? "Да" : "Нет", false);
-
-                // Format dopinfo as a readable string
-                String dopinfoStr = "-";
-                if (ra.getDopinfo() != null && !ra.getDopinfo().isEmpty()) {
-                    dopinfoStr = ra.getDopinfo().entrySet().stream()
-                            .map(e -> e.getKey() + ": " + e.getValue())
-                            .collect(Collectors.joining("; "));
-                }
-                setCell(row, 6, dopinfoStr, false);
+                Row r = sheet.createRow(rowIndex++);
+                setCell(r, 0, orDash(ra.getFio()), false);
+                setCell(r, 1, orDash(ra.getRelation()), false);
+                setCell(r, 2, orDash(ra.getIin()), false);
+                setCell(r, 3, orDash(ra.getActives()), false);
+                setCell(r, 4, orDash(ra.getIncomes()), false);
+                setCell(r, 5, ra.isNominal() ? "Да" : "Нет", false);
+                setCell(r, 6, formatDopinfo(ra.getDopinfo()), false);
             }
-            log.debug("Added relations table for category: {}", category);
         }
         return rowIndex;
     }
 
-    private int addActivesAndIncomesSection(XSSFSheet sheet, int rowIndex, ActiveWithRecords activeResponse,
+    private int addActivesAndIncomesSection(Sheet sheet, int rowIndex, ActiveWithRecords activeResponse,
                                             IncomeWithRecords incomeResponse) {
-        // Actives
         rowIndex = addBoldRow(sheet, rowIndex, "Активы:");
-        if (activeResponse != null && activeResponse.getRecordsByOper() != null && !activeResponse.getRecordsByOper().isEmpty()) {
-            rowIndex = addActivesTable(sheet, rowIndex, activeResponse.getRecordsByOper());
-        } else {
-            rowIndex = addRow(sheet, rowIndex, "Нет данных об активах");
-        }
+        rowIndex = activeResponse != null && activeResponse.getRecordsByOper() != null && !activeResponse.getRecordsByOper().isEmpty()
+                ? addActivesTable(sheet, rowIndex, activeResponse.getRecordsByOper())
+                : addRow(sheet, rowIndex, "Нет данных об активах");
         rowIndex++;
 
-        // Incomes
         rowIndex = addBoldRow(sheet, rowIndex, "Доходы:");
-        if (incomeResponse != null && incomeResponse.getRecordsByYear() != null && !incomeResponse.getRecordsByYear().isEmpty()) {
-            rowIndex = addIncomesTable(sheet, rowIndex, incomeResponse.getRecordsByYear());
+        rowIndex = incomeResponse != null && incomeResponse.getRecordsByYear() != null && !incomeResponse.getRecordsByYear().isEmpty()
+                ? addIncomesTable(sheet, rowIndex, incomeResponse.getRecordsByYear())
+                : addRow(sheet, rowIndex, "Нет данных о доходах");
+        return rowIndex + 1;
+    }
+
+    private int addActivesTable(Sheet sheet, int rowIndex, List<RecordDt> records) {
+        if (records == null || records.isEmpty()) {
+            return addRow(sheet, rowIndex, "  Нет записей для активов");
+        }
+
+        boolean hasESF = records.stream().anyMatch(r -> r instanceof ESFInformationRecordDt);
+        Row header = sheet.createRow(rowIndex++);
+        if (hasESF) {
+            setCell(header, 0, "ИИН/БИН", true);
+            setCell(header, 1, "ИИН Покуп.", true);
+            setCell(header, 2, "ИИН Прод.", true);
+            setCell(header, 3, "Дата", true);
+            setCell(header, 4, "База данных", true);
+            setCell(header, 5, "Активы", true);
+            setCell(header, 6, "Операция", true);
+            setCell(header, 7, "Доп. инфо", true);
+            setCell(header, 8, "Сумма", true);
+
+            for (RecordDt r : records) {
+                Row row = sheet.createRow(rowIndex++);
+                if (r instanceof ESFInformationRecordDt esf) {
+                    setCell(row, 0, esf.getIin_bin(), false);
+                    setCell(row, 1, esf.getIin_bin_pokup(), false);
+                    setCell(row, 2, esf.getIin_bin_prod(), false);
+                    setCell(row, 3, esf.getDate() != null ? esf.getDate().toString() : "-", false);
+                    setCell(row, 4, esf.getDatabase(), false);
+                    setCell(row, 5, esf.getAktivy(), false);
+                    setCell(row, 6, esf.getOper(), false);
+                    setCell(row, 7, esf.getDopinfo(), false);
+                    setCell(row, 8, esf.getSumm(), false);
+                } else {
+                    setCell(row, 0, r.getIin_bin(), false);
+                    setCell(row, 1, "-", false);
+                    setCell(row, 2, "-", false);
+                    setCell(row, 3, r.getDate() != null ? r.getDate().toString() : "-", false);
+                    setCell(row, 4, r.getDatabase(), false);
+                    setCell(row, 5, r.getAktivy(), false);
+                    setCell(row, 6, r.getOper(), false);
+                    setCell(row, 7, r.getDopinfo(), false);
+                    setCell(row, 8, r.getSumm(), false);
+                }
+            }
         } else {
-            rowIndex = addRow(sheet, rowIndex, "Нет данных о доходах");
+            setCell(header, 0, "ИИН/БИН", true);
+            setCell(header, 1, "Дата", true);
+            setCell(header, 2, "База данных", true);
+            setCell(header, 3, "Операция", true);
+            setCell(header, 4, "Доп. инфо", true);
+            setCell(header, 5, "Сумма", true);
+
+            for (RecordDt r : records) {
+                Row row = sheet.createRow(rowIndex++);
+                setCell(row, 0, r.getIin_bin(), false);
+                setCell(row, 1, r.getDate() != null ? r.getDate().toString() : "-", false);
+                setCell(row, 2, r.getDatabase(), false);
+                setCell(row, 3, r.getOper(), false);
+                setCell(row, 4, r.getDopinfo(), false);
+                setCell(row, 5, r.getSumm(), false);
+            }
         }
         return rowIndex + 1;
     }
 
-    private int addActivesTable(XSSFSheet sheet, int rowIndex, List<RecordDt> recordsByOper) {
-        rowIndex = addBoldRow(sheet, rowIndex, "Активы:");
-
-        if (recordsByOper == null || recordsByOper.isEmpty()) {
-            rowIndex = addRow(sheet, rowIndex, "  Нет записей для активов");
-            rowIndex++;
-            return rowIndex;
-        }
-
-        boolean hasESFRecords = recordsByOper.stream().anyMatch(record -> record instanceof ESFInformationRecordDt);
-
-        // Header row
-        XSSFRow headerRow = sheet.createRow(rowIndex++);
-        if (hasESFRecords) {
-            setCell(headerRow, 0, "ИИН/БИН", true);
-            setCell(headerRow, 1, "ИИН Покуп.", true);
-            setCell(headerRow, 2, "ИИН Прод.", true);
-            setCell(headerRow, 3, "Дата", true);
-            setCell(headerRow, 4, "База данных", true);
-            setCell(headerRow, 5, "Активы", true);
-            setCell(headerRow, 6, "Операция", true);
-            setCell(headerRow, 7, "Доп. инфо", true);
-            setCell(headerRow, 8, "Сумма", true);
-
-            // Data rows
-            for (RecordDt record : recordsByOper) {
-                XSSFRow row = sheet.createRow(rowIndex++);
-                if (record instanceof ESFInformationRecordDt esfRecord) {
-                    setCell(row, 0, esfRecord.getIin_bin() != null ? esfRecord.getIin_bin() : "-", false);
-                    setCell(row, 1, esfRecord.getIin_bin_pokup() != null ? esfRecord.getIin_bin_pokup() : "-", false);
-                    setCell(row, 2, esfRecord.getIin_bin_prod() != null ? esfRecord.getIin_bin_prod() : "-", false);
-                    setCell(row, 3, esfRecord.getDate() != null ? esfRecord.getDate().toString() : "-", false);
-                    setCell(row, 4, esfRecord.getDatabase() != null ? esfRecord.getDatabase() : "-", false);
-                    setCell(row, 5, esfRecord.getAktivy() != null ? esfRecord.getAktivy() : "-", false);
-                    setCell(row, 6, esfRecord.getOper() != null ? esfRecord.getOper() : "-", false);
-                    setCell(row, 7, esfRecord.getDopinfo() != null ? esfRecord.getDopinfo() : "-", false);
-                    setCell(row, 8, esfRecord.getSumm() != null ? esfRecord.getSumm() : "-", false);
-                } else if (record instanceof InformationRecordDt info) {
-                    setCell(row, 0, info.getIin_bin() != null ? record.getIin_bin() : "-", false);
-                    setCell(row, 1, "-", false);
-                    setCell(row, 2, "-", false);
-                    setCell(row, 3, info.getDate() != null ? record.getDate().toString() : "-", false);
-                    setCell(row, 4, info.getDatabase() != null ? record.getDatabase() : "-", false);
-                    setCell(row, 5, info.getAktivy() != null ? record.getAktivy() : "-", false);
-                    setCell(row, 6, info.getOper() != null ? record.getOper() : "-", false);
-                    setCell(row, 7, info.getDopinfo() != null ? record.getDopinfo() : "-", false);
-                    setCell(row, 8, info.getSumm() != null ? record.getSumm() : "-", false);
-                } else if (record instanceof NaoConRecordDt nao) {
-                    setCell(row, 0, nao.getIin_bin() != null ? record.getIin_bin() : "-", false);
-                    setCell(row, 1, "-", false);
-                    setCell(row, 2, "-", false);
-                    setCell(row, 3, nao.getDate() != null ? record.getDate().toString() : "-", false);
-                    setCell(row, 4, nao.getDatabase() != null ? record.getDatabase() : "-", false);
-                    setCell(row, 5, nao.getAktivy() != null ? record.getAktivy() : "-", false);
-                    setCell(row, 6, nao.getOper() != null ? record.getOper() : "-", false);
-                    setCell(row, 7, nao.getDopinfo() != null ? record.getDopinfo() : "-", false);
-                    setCell(row, 8, nao.getSumm() != null ? record.getSumm() : "-", false);
-                }
-            }
-        } else {
-            setCell(headerRow, 0, "ИИН/БИН", true);
-            setCell(headerRow, 1, "Дата", true);
-            setCell(headerRow, 2, "База данных", true);
-            setCell(headerRow, 3, "Операция", true);
-            setCell(headerRow, 4, "Доп. инфо", true);
-            setCell(headerRow, 5, "Сумма", true);
-
-            // Data rows
-            for (RecordDt record : recordsByOper) {
-                XSSFRow row = sheet.createRow(rowIndex++);
-                setCell(row, 0, record.getIin_bin() != null ? record.getIin_bin() : "-", false);
-                setCell(row, 1, record.getDate() != null ? record.getDate().toString() : "-", false);
-                setCell(row, 2, record.getDatabase() != null ? record.getDatabase() : "-", false);
-                setCell(row, 3, record.getOper() != null ? record.getOper() : "-", false);
-                setCell(row, 4, record.getDopinfo() != null ? record.getDopinfo() : "-", false);
-                setCell(row, 5, record.getSumm() != null ? record.getSumm() : "-", false);
-            }
-        }
-
-        rowIndex++;
-        return rowIndex;
-    }
-
-    private int addIncomesTable(XSSFSheet sheet, int rowIndex, List<RecordDt> records) {
+    private int addIncomesTable(Sheet sheet, int rowIndex, List<RecordDt> records) {
         if (records == null || records.isEmpty()) {
             return addRow(sheet, rowIndex, "  Нет записей о доходах");
         }
 
-        // Header row
-        XSSFRow headerRow = sheet.createRow(rowIndex++);
-        setCell(headerRow, 0, "ИИН/БИН", true);
-        setCell(headerRow, 1, "Дата", true);
-        setCell(headerRow, 2, "База данных", true);
-        setCell(headerRow, 3, "Операция", true);
-        setCell(headerRow, 4, "Доп. инфо", true);
-        setCell(headerRow, 5, "Сумма", true);
+        Row header = sheet.createRow(rowIndex++);
+        setCell(header, 0, "ИИН/БИН", true);
+        setCell(header, 1, "Дата", true);
+        setCell(header, 2, "База данных", true);
+        setCell(header, 3, "Операция", true);
+        setCell(header, 4, "Доп. инфо", true);
+        setCell(header, 5, "Сумма", true);
 
-        // Data rows
-        for (RecordDt record : records) {
-            XSSFRow row = sheet.createRow(rowIndex++);
-            setCell(row, 0, record.getIin_bin() != null ? record.getIin_bin() : "-", false);
-            setCell(row, 1, record.getDate() != null ? record.getDate().toString() : "-", false);
-            setCell(row, 2, record.getDatabase() != null ? record.getDatabase() : "-", false);
-            setCell(row, 3, record.getOper() != null ? record.getOper() : "-", false);
-            setCell(row, 4, record.getDopinfo() != null ? record.getDopinfo() : "-", false);
-            setCell(row, 5, record.getSumm() != null ? record.getSumm() : "", false);
+        for (RecordDt r : records) {
+            Row row = sheet.createRow(rowIndex++);
+            setCell(row, 0, r.getIin_bin(), false);
+            setCell(row, 1, r.getDate() != null ? r.getDate().toString() : "-", false);
+            setCell(row, 2, r.getDatabase(), false);
+            setCell(row, 3, r.getOper(), false);
+            setCell(row, 4, r.getDopinfo(), false);
+            setCell(row, 5, r.getSumm() != null ? r.getSumm().toString() : "-", false);
         }
         return rowIndex;
     }
 
-    private int addJobInformationSection(XSSFSheet sheet, int rowIndex,
-                                         List<Pension> pensions, Head head,
-                                         Industry industry, List<TurnoverRecord> turnoverRecords) {
-        // Industry section
+    private int addJobInformationSection(Sheet sheet, int rowIndex, List<Pension> pensions, Head headFl,
+                                         Industry industry, List<TurnoverRecord> turnovers) {
         rowIndex = addBoldRow(sheet, rowIndex, "Отрасль:");
-        rowIndex = addRow(sheet, rowIndex, industry != null && industry.getName() != null && !industry.getName().isEmpty()
-                ? industry.getName()
-                : "Информация об отрасли отсутствует");
+        rowIndex = addRow(sheet, rowIndex, industry != null && industry.getName() != null ? industry.getName() : "Информация отсутствует");
         rowIndex++;
 
-
-        // Pensions section
         rowIndex = addBoldRow(sheet, rowIndex, "Пенсионные взносы:");
-        if (pensions != null && !pensions.isEmpty()) {
-            rowIndex = addPensionsTable(sheet, rowIndex, pensions);
-        } else {
-            rowIndex = addRow(sheet, rowIndex, "Нет данных о пенсионных взносах");
-        }
-
-
-        // Head section
-        rowIndex = addBoldRow(sheet, rowIndex, "Руководящие позиции:");
-        if (!head.isEmpty()) {
-            rowIndex = addHeadInformationTable(sheet, rowIndex, head);
-        } else {
-            rowIndex = addRow(sheet, rowIndex, "Нет информации о руководящих позициях");
-        }
+        rowIndex = pensions != null && !pensions.isEmpty() ? addPensionsTable(sheet, rowIndex, pensions)
+                : addRow(sheet, rowIndex, "Нет данных");
         rowIndex++;
 
+        rowIndex = addBoldRow(sheet, rowIndex, "Руководящие позиции:");
+        rowIndex = headFl != null && !headFl.isEmpty() ? addHeadInformationTable(sheet, rowIndex, headFl)
+                : addRow(sheet, rowIndex, "Нет информации");
+        rowIndex++;
 
-        // Turnover section
         rowIndex = addBoldRow(sheet, rowIndex, "Банковские счета:");
-        if (turnoverRecords != null && !turnoverRecords.isEmpty()) {
-            rowIndex = addTurnoversTable(sheet, rowIndex, turnoverRecords);
-        } else {
-            rowIndex = addRow(sheet, rowIndex, "Нет информации о банковских счетах");
-        }
+        rowIndex = turnovers != null && !turnovers.isEmpty() ? addTurnoversTable(sheet, rowIndex, turnovers)
+                : addRow(sheet, rowIndex, "Нет информации");
         return rowIndex + 1;
     }
 
-    private int addHeadInformationTable(XSSFSheet sheet, int rowIndex, Head head) {
-        // Supervisor information
-        if (head.getHead() != null && !head.getHead().isEmpty()) {
+    private int addHeadInformationTable(Sheet sheet, int rowIndex, Head headFl) {
+        if (headFl.getHead() != null && !headFl.getHead().isEmpty()) {
             rowIndex = addBoldRow(sheet, rowIndex, "Руководящие должности:");
-            XSSFRow headerRow = sheet.createRow(rowIndex++);
-            setCell(headerRow, 0, "ИИН/БИН", true);
-            setCell(headerRow, 1, "Тип позиции", true);
-            setCell(headerRow, 2, "ИИН/БИН налогоплательщика", true);
-            setCell(headerRow, 3, "Тип", true);
-            setCell(headerRow, 4, "Наименование", true);
+            Row h = sheet.createRow(rowIndex++);
+            setCell(h, 0, "ИИН/БИН", true);
+            setCell(h, 1, "Тип позиции", true);
+            setCell(h, 2, "ИИН/БИН налогопл.", true);
+            setCell(h, 4, "Наименование", true);
 
-            for (SupervisorRecord supervisor : head.getHead()) {
-                XSSFRow row = sheet.createRow(rowIndex++);
-                setCell(row, 0, supervisor.getIin_bin() != null ? supervisor.getIin_bin() : "-", false);
-                setCell(row, 1, supervisor.getPositionType() != null ? supervisor.getPositionType() : "-", false);
-                setCell(row, 2, supervisor.getTaxpayer_iin_bin() != null ? supervisor.getTaxpayer_iin_bin() : "-", false);
-                //  setCell(row, 3, supervisor.getTaxpayerType() != null ? supervisor.getTaxpayerType() : "-", false);
-                setCell(row, 4, supervisor.getTaxpayerName() != null ? supervisor.getTaxpayerName() : "-", false);
+            for (var s : headFl.getHead()) {
+                Row r = sheet.createRow(rowIndex++);
+                setCell(r, 0, s.getIin_bin(), false);
+                setCell(r, 1, s.getPositionType(), false);
+                setCell(r, 2, s.getTaxpayer_iin_bin(), false);
+                setCell(r, 4, s.getTaxpayerName(), false);
             }
         }
 
-        // Company information
-        if (head.getOked() != null && !head.getOked().isEmpty()) {
-            rowIndex = addBoldRow(sheet, rowIndex, "Компании:");
-            XSSFRow headerRow = sheet.createRow(rowIndex++);
-            setCell(headerRow, 0, "Русское название", true);
-            setCell(headerRow, 1, "Оригинальное название", true);
-            setCell(headerRow, 2, "БИН", true);
-            setCell(headerRow, 3, "Дата регистрации", true);
-            setCell(headerRow, 4, "Телефон", true);
-
-            for (CompanyRecord company : head.getOked()) {
-                XSSFRow row = sheet.createRow(rowIndex++);
-                setCell(row, 0, company.getRusName() != null ? company.getRusName() : "-", false);
-                setCell(row, 1, company.getOrigName() != null ? company.getOrigName() : "-", false);
-                setCell(row, 2, company.getBin() != null ? company.getBin() : "-", false);
-                setCell(row, 3, company.getDateReg() != null ? company.getDateReg().toString() : "-", false);
-                setCell(row, 4, company.getTelephone() != null ? company.getTelephone() : "-", false);
-            }
-        }
-
-        // Financial summary
         rowIndex = addBoldRow(sheet, rowIndex, "Финансовая информация:");
-        rowIndex = addRow(sheet, rowIndex, "Доход: " + (head.getIncome() != null ? head.getIncome().toString() : "-"));
-        rowIndex = addRow(sheet, rowIndex, "Налоги: " + (head.getTax() != null ? head.getTax().toString() : "-"));
+        rowIndex = addRow(sheet, rowIndex, "Доход: " + orDash(headFl.getIncome()));
+        rowIndex = addRow(sheet, rowIndex, "Налоги: " + orDash(headFl.getTax()));
 
-        // ESF information
-        if (head.getEsf() != null && !head.getEsf().isEmpty()) {
+        if (headFl.getEsf() != null && !headFl.getEsf().isEmpty()) {
             rowIndex = addBoldRow(sheet, rowIndex, "ESF информация:");
-            XSSFRow headerRow = sheet.createRow(rowIndex++);
-            setCell(headerRow, 0, "ИИН/БИН", true);
-            setCell(headerRow, 1, "Дата", true);
-            setCell(headerRow, 2, "Активы", true);
-            setCell(headerRow, 3, "Сумма", true);
+            Row h = sheet.createRow(rowIndex++);
+            setCell(h, 0, "ИИН/БИН", true);
+            setCell(h, 1, "Дата", true);
+            setCell(h, 2, "Активы", true);
+            setCell(h, 3, "Сумма", true);
 
-            for (org.info.infobaza.model.info.active_income.EsfOverall esf : head.getEsf()) {
-                XSSFRow row = sheet.createRow(rowIndex++);
-                setCell(row, 0, esf.getIin_bin() != null ? esf.getIin_bin() : "-", false);
-                setCell(row, 1, esf.getDate() != null ? esf.getDate().toString() : "-", false);
-                setCell(row, 2, esf.getAktivy() != null ? esf.getAktivy() : "-", false);
-                setCell(row, 3, esf.getSumm() != null ? esf.getSumm().toString() : "-", false);
+            for (var e : headFl.getEsf()) {
+                Row r = sheet.createRow(rowIndex++);
+                setCell(r, 0, e.getIin_bin(), false);
+                setCell(r, 1, e.getDate() != null ? e.getDate().toString() : "-", false);
+                setCell(r, 2, e.getAktivy(), false);
+                setCell(r, 3, e.getSumm() != null ? e.getSumm().toString() : "-", false);
             }
         }
 
-        // Statuses
-        if (head.getStatuses() != null && !head.getStatuses().isEmpty()) {
+        if (headFl.getStatuses() != null && !headFl.getStatuses().isEmpty()) {
             rowIndex = addBoldRow(sheet, rowIndex, "Статусы:");
-            rowIndex = addRow(sheet, rowIndex, String.join(", ", head.getStatuses()));
+            rowIndex = addRow(sheet, rowIndex, String.join(", ", headFl.getStatuses()));
         }
         return rowIndex;
     }
 
-    private int addPensionsTable(XSSFSheet sheet, int rowIndex, List<Pension> pensions) {
-        XSSFRow headerRow = sheet.createRow(rowIndex++);
-        setCell(headerRow, 0, "Дата с", true);
-        setCell(headerRow, 1, "Дата по", true);
-        setCell(headerRow, 2, "Наименование", true);
-        setCell(headerRow, 3, "P_RNN", true);
-        setCell(headerRow, 4, "Максимальная з.п.", true);
-        setCell(headerRow, 5, "Последняя з.п.", true);
-        setCell(headerRow, 6, "Суммарно", true);
+    private int addPensionsTable(Sheet sheet, int rowIndex, List<Pension> pensions) {
+        Row h = sheet.createRow(rowIndex++);
+        setCell(h, 0, "Дата с", true);
+        setCell(h, 1, "Дата по", true);
+        setCell(h, 2, "Наименование", true);
+        setCell(h, 3, "P_RNN", true);
+        setCell(h, 4, "Макс. з.п.", true);
+        setCell(h, 5, "Последняя з.п.", true);
+        setCell(h, 6, "Суммарно", true);
 
-        for (Pension pension : pensions) {
-            XSSFRow row = sheet.createRow(rowIndex++);
-            setCell(row, 0, pension.getDateFrom() != null ? pension.getDateFrom() : "-", false);
-            setCell(row, 1, pension.getDateTo() != null ? pension.getDateTo() : "-", false);
-            setCell(row, 2, pension.getName() != null ? pension.getName() : "-", false);
-            setCell(row, 3, pension.getP_RNN() != null ? pension.getP_RNN() : "-", false);
-            setCell(row, 4, pension.getMaxSalary() != null ? pension.getMaxSalary() : "-", false);
-            setCell(row, 5, pension.getLastSalary() != null ? pension.getLastSalary() : "-", false);
-            setCell(row, 6, pension.getSumm() != null ? pension.getSumm() : "-", false);
+        for (Pension p : pensions) {
+            Row r = sheet.createRow(rowIndex++);
+            setCell(r, 0, p.getDateFrom(), false);
+            setCell(r, 1, p.getDateTo(), false);
+            setCell(r, 2, p.getName(), false);
+            setCell(r, 3, p.getP_RNN(), false);
+            setCell(r, 4, p.getMaxSalary(), false);
+            setCell(r, 5, p.getLastSalary(), false);
+            setCell(r, 6, p.getSumm(), false);
         }
         return rowIndex;
     }
 
-    private int addTurnoversTable(XSSFSheet sheet, int rowIndex,
-                                  List<TurnoverRecord> turnoverRecords) {
-        XSSFRow headerRow = sheet.createRow(rowIndex++);
-        setCell(headerRow, 0, "ИИН/БИН", true);
-        setCell(headerRow, 1, "Название банка", true);
-        setCell(headerRow, 2, "Счет", true);
-        setCell(headerRow, 3, "Сумма", true);
-        setCell(headerRow, 4, "Дата от", true);
-        setCell(headerRow, 5, "Дата до", true);
-        setCell(headerRow, 6, "Источник", true);
+    private int addTurnoversTable(Sheet sheet, int rowIndex, List<TurnoverRecord> records) {
+        Row h = sheet.createRow(rowIndex++);
+        setCell(h, 0, "ИИН/БИН", true);
+        setCell(h, 1, "Банк", true);
+        setCell(h, 2, "Счет", true);
+        setCell(h, 3, "Сумма", true);
+        setCell(h, 4, "Дата от", true);
+        setCell(h, 5, "Дата до", true);
+        setCell(h, 6, "Источник", true);
 
-        for (TurnoverRecord turnoverRecord : turnoverRecords) {
-            XSSFRow row = sheet.createRow(rowIndex++);
-            setCell(row, 0, turnoverRecord.getIinBin() != null ? turnoverRecord.getIinBin() : "-", false);
-            setCell(row, 1, turnoverRecord.getBankName() != null ? turnoverRecord.getBankName() : "-", false);
-            setCell(row, 2, turnoverRecord.getBankAccount() != null ? turnoverRecord.getBankAccount() : "-", false);
-            setCell(row, 3, turnoverRecord.getSumm() != null ? turnoverRecord.getSumm() : "-", false);
-            setCell(row, 4, turnoverRecord.getStartDate() != null ? turnoverRecord.getStartDate() : "-", false);
-            setCell(row, 5, turnoverRecord.getEndDate() != null ? turnoverRecord.getEndDate() : "-", false);
-            setCell(row, 6, turnoverRecord.getSource() != null ? turnoverRecord.getSource() : "-", false);
+        for (TurnoverRecord t : records) {
+            Row r = sheet.createRow(rowIndex++);
+            setCell(r, 0, t.getIinBin(), false);
+            setCell(r, 1, t.getBankName(), false);
+            setCell(r, 2, t.getBankAccount(), false);
+            setCell(r, 3, t.getSumm(), false);
+            setCell(r, 4, t.getStartDate(), false);
+            setCell(r, 5, t.getEndDate(), false);
+            setCell(r, 6, t.getSource(), false);
         }
         return rowIndex;
     }
 
-    private int addBoldRow(XSSFSheet sheet, int rowIndex, String text) {
-        XSSFRow row = sheet.createRow(rowIndex++);
-        XSSFCell cell = row.createCell(0);
+    // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
+
+    private int addBoldRow(Sheet sheet, int rowIndex, String text) {
+        Row row = sheet.createRow(rowIndex);
+        Cell cell = row.createCell(0);
         cell.setCellValue(text);
-        XSSFCellStyle style = sheet.getWorkbook().createCellStyle();
-        XSSFFont font = sheet.getWorkbook().createFont();
+        CellStyle style = sheet.getWorkbook().createCellStyle();
+        Font font = sheet.getWorkbook().createFont();
         font.setBold(true);
         style.setFont(font);
         cell.setCellStyle(style);
-        return rowIndex;
+        return rowIndex + 1;
     }
 
-    private int addRow(XSSFSheet sheet, int rowIndex, String text) {
-        XSSFRow row = sheet.createRow(rowIndex++);
+    private int addRow(Sheet sheet, int rowIndex, String text) {
+        Row row = sheet.createRow(rowIndex++);
         setCell(row, 0, text, false);
         return rowIndex;
     }
 
-    private void setCell(XSSFRow row, int colIndex, String text, boolean isBold) {
-        XSSFCell cell = row.createCell(colIndex);
-        cell.setCellValue(text);
-        XSSFCellStyle style = row.getSheet().getWorkbook().createCellStyle();
-        XSSFFont font = row.getSheet().getWorkbook().createFont();
-        font.setBold(isBold);
+    private void setCell(Row row, int col, Object value, boolean bold) {
+        Cell cell = row.createCell(col);
+        cell.setCellValue(value == null ? "-" : value.toString());
+        CellStyle style = row.getSheet().getWorkbook().createCellStyle();
+        Font font = row.getSheet().getWorkbook().createFont();
+        font.setBold(bold);
         style.setFont(font);
         cell.setCellStyle(style);
+    }
+
+    private String orDash(Object value) {
+        return value == null || (value instanceof String s && s.isBlank()) ? "-" : value.toString();
+    }
+
+    private String formatDopinfo(Map<String, String> map) {
+        return map == null || map.isEmpty() ? "-" :
+                map.entrySet().stream().map(e -> e.getKey() + ": " + e.getValue()).collect(Collectors.joining("; "));
+    }
+
+    private boolean hasRelations(RelationActiveWithTypes rel) {
+        return rel != null && rel.getTypeToRelation() != null && !rel.getTypeToRelation().isEmpty();
     }
 }

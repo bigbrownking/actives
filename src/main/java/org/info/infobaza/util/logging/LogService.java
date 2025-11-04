@@ -7,7 +7,11 @@ import org.apache.logging.log4j.Logger;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.info.infobaza.model.main.Log;
+import org.info.infobaza.repository.main.LogRepository;
+import org.info.infobaza.security.UserDetailsServiceImpl;
 import org.info.infobaza.util.convert.IinChecker;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -22,7 +26,9 @@ import static org.info.infobaza.util.user.UserUtil.getCurrentHttpRequest;
 
 @Aspect
 @Component
+@RequiredArgsConstructor
 public class LogService {
+    private final LogRepository logRepository;
     private static final Logger logger = LogManager.getLogger(LogService.class);
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
@@ -85,6 +91,10 @@ public class LogService {
                     timestamp, requestDetails, t.getMessage(), executionTime);
             throw t;
         }
+    }
+
+    public Log saveLog(Log log){
+        return logRepository.save(log);
     }
 
 

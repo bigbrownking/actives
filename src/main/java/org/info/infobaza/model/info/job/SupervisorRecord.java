@@ -10,6 +10,6 @@ public class SupervisorRecord {
     private String iin_bin;
     private String positionType;
     private String taxpayer_iin_bin;
-    private boolean isNominal;
+    private boolean nominal;
     private String taxpayerName;
 }

@@ -6,10 +6,10 @@ import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.dto.response.job.Head;
 import org.info.infobaza.model.info.active_income.EsfOverall;
-import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.job.HistorySupervisorRecord;
 import org.info.infobaza.model.info.job.StatusRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
+import org.info.infobaza.model.info.person.nominal.NominalRucUchr;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.service.portret.PortretService;
 import org.info.infobaza.util.convert.Mapper;
@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.info.infobaza.util.convert.IinChecker.isUl;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -33,19 +35,17 @@ public class HeadService {
     private final Analyzer analyzer;
 
     public Head constructHead(String iin, String dateFrom, String dateTo) throws IOException {
-        List<SupervisorRecord> supervisorRecords = getType(iin);
-        List<CompanyRecord> companyRecords = new ArrayList<>();
-        for (SupervisorRecord supervisorRecord : supervisorRecords) {
-            List<CompanyRecord> companyRecordsSmall = getCompanyInfo(supervisorRecord.getTaxpayer_iin_bin());
-            if (companyRecordsSmall != null) {
-                companyRecords.addAll(companyRecordsSmall);
-            }
+        List<SupervisorRecord> supervisorRecords;
+        if(isUl(iin)){
+             supervisorRecords = getUlType(iin);
+             replace(supervisorRecords);
         }
-
+        else {
+            supervisorRecords = getType(iin);
+        }
         return Head.builder()
                 .head(supervisorRecords)
                 .statuses(getStatuses(iin))
-                .oked(companyRecords)
                 .esf(getESFInfo(iin, dateFrom, dateTo))
                 .income(getIncome(iin, dateFrom, dateTo))
                 .tax(0.0)
@@ -92,8 +92,6 @@ public class HeadService {
         addHistoricalRecords(supervisorRecordSup, historySupervisorRecordSup, "Руководитель");
         addHistoricalRecords(supervisorRecordFou, historySupervisorRecordFou, "Учредитель");
 
-        //isNominals();
-
         if (supervisorRecordSup.isEmpty() && supervisorRecordFou.isEmpty()) {
             return new ArrayList<>();
         }
@@ -113,6 +111,12 @@ public class HeadService {
     private void addHistoricalRecords(List<SupervisorRecord> currentRecords,
                                       List<HistorySupervisorRecord> historyRecords,
                                       String positionType) throws IOException {
+        currentRecords.forEach(x -> {
+            try {
+                x.setNominal(portretService.isNominalUl(x.getTaxpayer_iin_bin()));
+            } catch (IOException ignored) {
+            }
+        });
         Set<String> currentCompanyIins = currentRecords.stream()
                 .map(SupervisorRecord::getTaxpayer_iin_bin)
                 .filter(x -> !x.isEmpty())
@@ -129,56 +133,12 @@ public class HeadService {
                         .iin_bin(histRecord.getIinBin())
                         .positionType("Исторический " + positionType)
                         .taxpayer_iin_bin(companyIin)
-                        .isNominal(portretService.isNominalUl(histRecord.getIinBin()))
+                        .nominal(portretService.isNominalUl(histRecord.getIinBinCompany()))
                         .taxpayerName(name)
                         .build();
 
                 currentRecords.add(historicalRecord);
             }
-        }
-    }
-
-    private void isNominals(List<SupervisorRecord> rucs, List<SupervisorRecord> uchs){
-        for(SupervisorRecord supervisorRecord : rucs){
-
-        }
-        for (SupervisorRecord supervisorRecord : uchs){
-
-        }
-    }
-
-    private List<CompanyRecord> getCompanyInfo(String iin) throws IOException {
-        if (iin == null || iin.trim().isEmpty()) {
-            log.warn("IIN is null or empty, cannot fetch company info");
-            return null;
-        }
-        String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.UL_zt_all.getPath(), iin);
-        try {
-            List<CompanyRecord> companyRecords = jdbcTemplate.query(sql, mapper::mapRowToCompany);
-            if (companyRecords == null || companyRecords.isEmpty()) {
-                log.warn("No company found for IIN: {}", iin);
-                return null;
-            }
-
-            Map<String, CompanyRecord> latestRecords = companyRecords.stream()
-                    .collect(Collectors.toMap(
-                            CompanyRecord::getOrigName,
-                            record -> record,
-                            (existing, replacement) -> {
-                                if (existing.getDateReg() == null) {
-                                    return replacement;
-                                }
-                                if (replacement.getDateReg() == null) {
-                                    return existing;
-                                }
-                                return existing.getDateReg().isAfter(replacement.getDateReg()) ? existing : replacement;
-                            }
-                    ));
-
-            return new ArrayList<>(latestRecords.values());
-        } catch (Exception e) {
-            log.error("Error fetching company info for IIN: {}", iin, e);
-            return null;
         }
     }
 
@@ -204,5 +164,87 @@ public class HeadService {
         return supervisorRecords.stream().filter(x -> !x.getTaxpayer_iin_bin().isEmpty()).distinct().toList();
     }
 
+    public String getBadBoss(String bin) throws IOException {
+        if(!isUl(bin)){
+            return null;
+        }
+        String nominalUlSql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_is_nominal.getPath(), bin);
+        List<NominalRucUchr> nominalRucUchrs = jdbcTemplate.query(nominalUlSql, mapper::mapRowToNominalRucUch);
+
+        log.info("NOMINALS LENGTH: {}", nominalRucUchrs.size());
+        if (nominalRucUchrs.isEmpty()) {
+            return null;
+        }
+        StringBuilder result = new StringBuilder();
+        for (NominalRucUchr nominalRucUchr : nominalRucUchrs) {
+            result.append(nominalRucUchr.getRol()).append(": ").append(nominalRucUchr.getRuc_uch_iin()).append("\n");
+        }
+        return result.toString();
+    }
+
+    public List<SupervisorRecord> getUlType(String iin) throws IOException {
+        String sqlSup = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_ruk_ul.getPath(), iin);
+        String sqlFou = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_uchr_ul.getPath(), iin);
+        String sqlHistSup = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_hist_ruk_ul.getPath(), iin);
+        String sqlHistFou = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Supervisor_hist_uchr_ul.getPath(), iin);
+
+        List<SupervisorRecord> supervisorRecordSup = new ArrayList<>();
+        List<SupervisorRecord> supervisorRecordFou = new ArrayList<>();
+        List<HistorySupervisorRecord> historySupervisorRecordSup = new ArrayList<>();
+        List<HistorySupervisorRecord> historySupervisorRecordFou = new ArrayList<>();
+
+        try {
+            supervisorRecordSup = jdbcTemplate.query(sqlSup, mapper::mapRowToSupervisor);
+            log.info("supervisor: {}", supervisorRecordSup);
+        } catch (EmptyResultDataAccessException e) {
+            log.warn("No руководитель found for IIN: {}", iin);
+        }
+
+        try {
+            supervisorRecordFou = jdbcTemplate.query(sqlFou, mapper::mapRowToFounder);
+            log.info("founder: {}", supervisorRecordFou);
+        } catch (EmptyResultDataAccessException e) {
+            log.warn("No учредитель found for IIN: {}", iin);
+        }
+
+        try {
+            historySupervisorRecordSup = jdbcTemplate.query(sqlHistSup, mapper::mapRowToHistorySupervisor);
+            log.info("history supervisor: {}", historySupervisorRecordSup);
+        } catch (EmptyResultDataAccessException e) {
+            log.warn("No history руководитель found for IIN: {}", iin);
+        }
+
+        try {
+            historySupervisorRecordFou = jdbcTemplate.query(sqlHistFou, mapper::mapRowToHistorySupervisor);
+            log.info("history founder: {}", historySupervisorRecordFou);
+        } catch (EmptyResultDataAccessException e) {
+            log.warn("No history учредитель found for IIN: {}", iin);
+        }
+
+        addHistoricalRecords(supervisorRecordSup, historySupervisorRecordSup, "Руководитель");
+        addHistoricalRecords(supervisorRecordFou, historySupervisorRecordFou, "Учредитель");
+
+        List<SupervisorRecord> finalRecords;
+        if (!supervisorRecordSup.isEmpty() && !supervisorRecordFou.isEmpty()) {
+            log.warn("found both supervisor and founder for IIN: {}", iin);
+            finalRecords = supervisorRecordFou;
+        } else if (!supervisorRecordSup.isEmpty()) {
+            log.warn("found supervisor for IIN: {}", iin);
+            finalRecords = supervisorRecordSup;
+        } else if (!supervisorRecordFou.isEmpty()) {
+            log.warn("found founder for IIN: {}", iin);
+            finalRecords = supervisorRecordFou;
+        } else {
+            return new ArrayList<>();
+        }
+
+        return keepDistinctSupervisorRecords(finalRecords);
+    }
+
+    private void replace(List<SupervisorRecord> finalRecords){
+        for (SupervisorRecord record : finalRecords) {
+            record.setTaxpayerName(analyzer.getFioByIin(record.getIin_bin()));
+        }
+    }
 
 }

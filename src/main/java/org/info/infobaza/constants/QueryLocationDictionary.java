@@ -75,8 +75,14 @@ public enum QueryLocationDictionary {
     Supervisor_uchr("sql/Supervisor/uchr.sql"),
     Supervisor_hist_ruk("sql/Supervisor/hist_ruk.sql"),
     Supervisor_hist_uchr("sql/Supervisor/hist_uchr.sql"),
+
+    Supervisor_ruk_ul("sql/Supervisor/ruk_ul.sql"),
+    Supervisor_uchr_ul("sql/Supervisor/uchr_ul.sql"),
+    Supervisor_hist_ruk_ul("sql/Supervisor/hist_ruk_ul.sql"),
+    Supervisor_hist_uchr_ul("sql/Supervisor/hist_uchr_ul.sql"),
+
     Supervisor_is_nominal_ruc_uchr("sql/Supervisor/is_nominal_ruc_uchr.sql"),
-    Supervisor_is_nominal("sql/Supervisor/is_nominal_ruc_uchr.sql"),
+    Supervisor_is_nominal("sql/Supervisor/is_nominal.sql"),
     Turnover_turnover("sql/turnover/turnover.sql"),
     Коммунальные("sql/Административные штрафы/коммунальные.sql"),
     CARS_CARS("sql/cars/cars.sql"),

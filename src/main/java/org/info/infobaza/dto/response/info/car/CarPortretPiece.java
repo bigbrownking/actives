@@ -21,10 +21,10 @@ public class CarPortretPiece {
     private Boolean isCryptoActive;
     private Boolean isNominal;
     private Boolean isNominalUl;
-    private String iinRukUch;
 
     private LocalDate startDate;
-    private LocalDate endDate;    private String role;
+    private LocalDate endDate;
+    private String role;
 
 
     public void copy(Person person){
@@ -36,7 +36,6 @@ public class CarPortretPiece {
         this.isCryptoActive = person.getIsCryptoActive();
         this.isNominal = person.getIsNominal();
         this.isNominalUl = person.getIsNominalUl();
-        this.iinRukUch = person.getIinRukUch();
     }
     public void mergeDates(LocalDate start, LocalDate end) {
         if (start != null) {

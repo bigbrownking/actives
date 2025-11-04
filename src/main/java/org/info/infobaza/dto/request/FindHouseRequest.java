@@ -19,26 +19,6 @@ public class FindHouseRequest {
     @Loggable
     private String rka;
 
-//    @Nullable
-//    @Loggable
-//    private String city;
-//
-//    @Nullable
-//    @Loggable
-//    private String district;
-//
-//    @Nullable
-//    @Loggable
-//    private String street;
-//
-//    @Nullable
-//    @Loggable
-//    private String house;
-//
-//    @Nullable
-//    @Loggable
-//    private String apartment;
-
     @Nullable
     @Loggable
     private String orderNum;

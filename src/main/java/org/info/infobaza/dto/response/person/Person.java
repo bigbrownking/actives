@@ -16,5 +16,4 @@ public class Person {
     private Boolean isCryptoActive;
     private Boolean isNominal;
     private Boolean isNominalUl;
-    private String iinRukUch;
 }

@@ -99,10 +99,14 @@ public class ObjectFinder {
 
         if (request.getVin() == null && request.getGrnz() == null) {
             log.warn("❌ VIN и GRNZ не указаны — возвращаю пустой портрет");
-            return CarPortret.builder().portrets(List.of()).build();
+            return CarPortret.builder()
+                    .cars(List.of())
+                    .portrets(List.of())
+                    .build();
         }
 
         Map<String, CarPortretPiece> pieceMap = new LinkedHashMap<>();
+        Map<String, CarInfo> carInfoMap = new LinkedHashMap<>();
 
         // === 1️⃣ Владелец ===
         Car owner = carService.getOwner(request.getVin(), request.getGrnz());
@@ -122,6 +126,18 @@ public class ObjectFinder {
         List<CarInsurance> insurances = carService.searchInsuranceCarByParams(request.getVin(), request.getGrnz());
 
         for (CarInsurance insurance : insurances) {
+            // === Добавляем информацию о машине ===
+            String carKey = insurance.getVin() != null ? insurance.getVin() : insurance.getGrnz();
+            if (carKey != null && !carInfoMap.containsKey(carKey)) {
+                CarInfo carInfo = new CarInfo();
+                carInfo.setMark(insurance.getMarka());
+                carInfo.setModel(insurance.getModel());
+                carInfo.setVin(insurance.getVin());
+                carInfo.setGrnz(insurance.getGrnz());
+                carInfoMap.put(carKey, carInfo);
+                log.info("🚗 Добавлена информация о машине: {} {} ({})", insurance.getMarka(), insurance.getModel(), insurance.getVin());
+            }
+
             // === Страхователь ===
             if (insurance.getIinInsurer() != null) {
                 String insurerIin = insurance.getIinInsurer();
@@ -167,13 +183,16 @@ public class ObjectFinder {
 
         // === 3️⃣ Результат ===
         List<CarPortretPiece> portrets = new ArrayList<>(pieceMap.values());
-        if (portrets.isEmpty()) {
+        List<CarInfo> cars = new ArrayList<>(carInfoMap.values());
+
+        if (portrets.isEmpty() && cars.isEmpty()) {
             log.info("ℹ️ Для VIN={} GRNZ={} не найдено данных", request.getVin(), request.getGrnz());
         } else {
-            log.info("✅ Собрано {} участников", portrets.size());
+            log.info("✅ Собрано {} участников и {} автомобилей", portrets.size(), cars.size());
         }
 
         return CarPortret.builder()
+                .cars(cars)
                 .portrets(portrets)
                 .build();
     }
