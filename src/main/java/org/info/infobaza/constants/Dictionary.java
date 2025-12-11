@@ -7,24 +7,23 @@ import lombok.RequiredArgsConstructor;
 import org.info.infobaza.dto.request.ExportRequest;
 import org.info.infobaza.dto.request.MassExportRequest;
 import org.info.infobaza.dto.response.info.ServiceSources;
-import org.info.infobaza.service.InformationalService;
-import org.info.infobaza.service.ServiceMetadata;
+import org.info.infobaza.service.*;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
 public final class Dictionary {
-    private static Map<String, List<Method>> incomeMethodsBySource = new HashMap<>();
-    private static Map<String, List<Method>> activeMethodsBySource = new HashMap<>();
-    private static Map<String, InformationalService> serviceBeans = new HashMap<>();
+    private static ServiceSources serviceSources;
+    private static Set<String> incomeSourcesSet = new HashSet<>();
+    private static Set<String> activeSourcesSet = new HashSet<>();
 
-    private final ApplicationContext applicationContext;
-    private ServiceSources serviceSources;
+    private final FetcherRegistry fetcherRegistry;
     public static final Map<String, String> SECONDARY_STATUSES = Map.of(
             "Перечислил ДС", "Финансовые операции",
             "Поступили ДС", "Финансовые операции",
@@ -36,6 +35,41 @@ public final class Dictionary {
             "Коммунальные платежи", "Вместе жили и коммунальные платежи",
             "Поверенный", "Доверенность",
             "Доверитель", "Доверенность"
+    );
+    public static final Map<String, String> RU = Map.ofEntries(
+            // Совместное проживание / работа
+            Map.entry("AP code", "Код АП"),
+            Map.entry("Registration date", "Дата регистрации"),
+            Map.entry("End registration date", "Дата снятия с регистрации"),
+
+            // Автостраховки
+            Map.entry("GRNZ", "ГРНЗ"),
+            Map.entry("Save begin date", "Начало страхования"),
+            Map.entry("Save end date", "Окончание страхования"),
+            Map.entry("VIN code", "VIN-код"),
+
+            // Денежные переводы
+            Map.entry("Operation date", "Дата операции"),
+            Map.entry("Operation summ", "Сумма"),
+            Map.entry("Operation name", "Операция"),
+
+            // Коммунальные платежи
+            Map.entry("Summ", "Сумма"),
+            Map.entry("For", "За что"),
+            Map.entry("Number", "Номер лицевого счёта"),
+
+            // Налоги
+            Map.entry("Tax for", "Налог за"),
+            Map.entry("BVU", "Банк"),
+            Map.entry("Tax number", "Номер платежа"),
+            Map.entry("UGD", "УГД"),
+            Map.entry("KNP", "КНП"),
+            Map.entry("KBK", "КБК"),
+            Map.entry("Purpose of tax", "Назначение налога"),
+
+            // Доверенности
+            Map.entry("For_dover", "По доверенности"),
+            Map.entry("Registration_date", "Дата выдачи")
     );
     public static final Map<String, String[]> TYPE_PREFIXES = Map.ofEntries(
             Map.entry("Недвижимое имущество", new String[]{"Вид недвижимости:", "Описание:"}),
@@ -89,27 +123,34 @@ public final class Dictionary {
         Set<String> activeVids = new HashSet<>();
         Set<String> incomeVids = new HashSet<>();
 
-        Map<String, InformationalService> serviceBeans = applicationContext.getBeansOfType(InformationalService.class);
+        // Get all unique sources from the registry
+        Map<String, List<DataFetcher>> allActiveFetchers = fetcherRegistry.getAllActiveFetchersBySource();
+        Map<String, List<DataFetcher>> allIncomeFetchers = fetcherRegistry.getAllIncomeFetchersBySource();
 
-        for (InformationalService service : serviceBeans.values()) {
-            Method[] methods = service.getClass().getDeclaredMethods();
-            for (Method method : methods) {
-                ServiceMetadata annotation = method.getAnnotation(ServiceMetadata.class);
-                if (annotation != null) {
-                    String source = annotation.source().length > 0 ? annotation.source()[0] : "";
+        // Collect active sources and their metadata
+        for (Map.Entry<String, List<DataFetcher>> entry : allActiveFetchers.entrySet()) {
+            activeSources.add(entry.getKey());
 
-                    if (annotation.isActive()) {
-                        activeSources.add(source);
-                        activeTypes.addAll(Arrays.asList(annotation.type()));
-                        activeVids.addAll(Arrays.asList(annotation.vids()));
-                    }
-                    if (annotation.isIncome()) {
-                        incomeSources.add(source);
-                        incomeVids.addAll(Arrays.asList(annotation.vids()));
-                    }
-                }
+            for (DataFetcher fetcher : entry.getValue()) {
+                FetcherMetadata meta = fetcher.getMetadata();
+                activeTypes.addAll(Arrays.asList(meta.getTypes()));
+                activeVids.addAll(Arrays.asList(meta.getVids()));
             }
         }
+
+        // Collect income sources and their metadata
+        for (Map.Entry<String, List<DataFetcher>> entry : allIncomeFetchers.entrySet()) {
+            incomeSources.add(entry.getKey());
+
+            for (DataFetcher fetcher : entry.getValue()) {
+                FetcherMetadata meta = fetcher.getMetadata();
+                incomeVids.addAll(Arrays.asList(meta.getVids()));
+            }
+        }
+
+        // Store for static access
+        incomeSourcesSet = new HashSet<>(incomeSources);
+        activeSourcesSet = new HashSet<>(activeSources);
 
         return new ServiceSources(
                 new ArrayList<>(incomeSources),
@@ -119,57 +160,43 @@ public final class Dictionary {
                 new ArrayList<>(incomeVids)
         );
     }
+    public static Map<String, Set<String>> getIncomeMethodsBySource() {
+        return incomeSourcesSet.stream()
+                .collect(Collectors.toMap(
+                        source -> source,
+                        source -> Collections.emptySet()
+                ));
+    }
 
-
+    public static Map<String, Set<String>> getActiveMethodsBySource() {
+        return activeSourcesSet.stream()
+                .collect(Collectors.toMap(
+                        source -> source,
+                        source -> Collections.emptySet()
+                ));
+    }
     @PostConstruct
     public void init() {
         serviceSources = getDistinctSources();
-        serviceBeans = applicationContext.getBeansOfType(InformationalService.class);
-        incomeMethodsBySource = new HashMap<>();
-        activeMethodsBySource = new HashMap<>();
-
-        for (InformationalService service : serviceBeans.values()) {
-            for (Method method : service.getClass().getDeclaredMethods()) {
-                ServiceMetadata metadata = method.getAnnotation(ServiceMetadata.class);
-                if (metadata != null) {
-                    if (metadata.isIncome()) {
-                        for (String source : metadata.source()) {
-                            incomeMethodsBySource.computeIfAbsent(source, k -> new ArrayList<>()).add(method);
-                        }
-                    } else if (metadata.isActive()) {
-                        for (String source : metadata.source()) {
-                            activeMethodsBySource.computeIfAbsent(source, k -> new ArrayList<>()).add(method);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    public static Map<String, List<Method>> getIncomeMethodsBySource() {
-        return Collections.unmodifiableMap(incomeMethodsBySource);
     }
 
-    public static Map<String, List<Method>> getActiveMethodsBySource() {
-        return Collections.unmodifiableMap(activeMethodsBySource);
-    }
-
-    public static Map<String, InformationalService> getServiceBeans() {
-        return Collections.unmodifiableMap(serviceBeans);
-    }
-
-    public List<String> getVidIncome(){
+    public List<String> getVidIncome() {
         return serviceSources.getIncomeVids();
     }
-    public List<String> getVidActive(){
+
+    public List<String> getVidActive() {
         return serviceSources.getActiveVids();
     }
-    public List<String> getSourcesActive(){
+
+    public List<String> getSourcesActive() {
         return serviceSources.getActiveSources();
     }
-    public List<String> getSourcesIncome(){
+
+    public List<String> getSourcesIncome() {
         return serviceSources.getIncomeSources();
     }
-    public List<String> getTypesActives(){
+
+    public List<String> getTypesActives() {
         return serviceSources.getActiveTypes();
     }
 }

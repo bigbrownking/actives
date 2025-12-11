@@ -19,6 +19,6 @@ public class RelationActive {
     private String incomes;
     private Map<String, String> dopinfo;
     private List<SupervisorRecord> head;
-    private boolean isNominal;
+    private String info;
     private int level;
 }

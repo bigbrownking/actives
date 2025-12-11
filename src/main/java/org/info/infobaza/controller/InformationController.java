@@ -5,6 +5,7 @@ import org.info.infobaza.dto.request.*;
 import org.info.infobaza.dto.response.info.active.ActiveResponse;
 import org.info.infobaza.dto.response.info.income.IncomeResponse;
 import org.info.infobaza.dto.response.info.yearlyCounts.YearlyRecordCounts;
+import org.info.infobaza.repository.dossierprime.DossierFlRepository;
 import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.constants.Dictionary;
 import org.info.infobaza.service.ObjectFinder;
@@ -22,10 +23,11 @@ public class InformationController {
 
     private final Analyzer analyzer;
     private final Dictionary dictionary;
+    private final DossierFlRepository dossierFlRepository;
 
     @LogRequest
     @PostMapping("/active")
-    @Cacheable(value = "actives", key = "#request")
+    @Cacheable(value = "active", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<ActiveResponse> getAllActivesOfPerson(@RequestBody RelativesActiveRequest request) {
         ActiveResponse activeResponse = analyzer.getAllActivesOfPersonsByDates(
                 request.getIin(),
@@ -44,7 +46,7 @@ public class InformationController {
 
     @LogRequest
     @PostMapping("/activeCounts")
-    @Cacheable(value = "activeCounts", key = "{'request': #request, 'button': #button}")
+    @Cacheable(value = "activeCounts", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<ActiveResponse> getAllActiveCountsOfPerson(@RequestBody RelativesActiveRequest request,
                                                                      @RequestParam(value = "button", required = false) String button) {
         ActiveResponse activeResponse = analyzer.getAllActiveCountsOfPersonsByDates(
@@ -65,7 +67,7 @@ public class InformationController {
 
     @LogRequest
     @PostMapping("/income")
-    @Cacheable(value = "incomes", key = "#request")
+    @Cacheable(value = "income", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<IncomeResponse> getAllIncomesOfPerson(@RequestBody RelativesIncomeRequest request) {
         IncomeResponse incomeResponse = analyzer.getAllIncomesOfPersonsByDates(
                 request.getIin(),
@@ -83,7 +85,7 @@ public class InformationController {
 
     @LogRequest
     @PostMapping("/yearCount")
-    @Cacheable(value = "yearCounts", key = "#request")
+    @Cacheable(value = "yearCounts", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<YearlyRecordCounts> getYearlyRecordCounts(@RequestBody RelativesActiveRequest request) {
         return ResponseEntity.ok(analyzer.getYearlyRecordCounts(
                 request.getIin(),
@@ -122,6 +124,4 @@ public class InformationController {
     public ResponseEntity<List<String>> getAllVidActive() {
         return ResponseEntity.ok(dictionary.getVidActive());
     }
-
-
 }

@@ -46,7 +46,7 @@ public class MainDBConfig {
     @Bean(name = "mainEntityManagerFactory")
     @Primary
     public LocalContainerEntityManagerFactoryBean mainEntityManagerFactory(EntityManagerFactoryBuilder builder) {
-        log.info("Connecting to ITAP...");
+        log.info("Connecting to INFOBAZA...");
         return builder
                 .dataSource(mainDataSource())
                 .packages("org.info.infobaza.model.main")

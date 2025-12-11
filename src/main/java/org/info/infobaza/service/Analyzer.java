@@ -20,6 +20,7 @@ import org.info.infobaza.model.info.person.RelationRecord;
 import org.info.infobaza.service.enpf.HeadService;
 import org.info.infobaza.service.nao_con.NaoConService;
 import org.info.infobaza.service.portret.PortretService;
+import org.info.infobaza.util.RecordKeyGenerator;
 import org.info.infobaza.util.convert.IinChecker;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.util.convert.NumberConverter;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
@@ -58,16 +60,20 @@ public class Analyzer {
     private final SQLFileUtil sqlFileUtil;
     private final NumberConverter numberConverter;
     private final NaoConService naoConService;
+    private final FetcherRegistry fetcherRegistry;
     private final Map<String, String> iinToFioCache = new ConcurrentHashMap<>();
+
     @Autowired
     public void setHeadService(@Lazy HeadService headService) {
         this.headService = headService;
     }
+
     public void clearCaches() {
         int size = iinToFioCache.size();
         iinToFioCache.clear();
         log.info("Кэш IIN→ФИО очищен (было {} записей)", size);
     }
+
     public String getFioByIin(String iin) {
         if (iin == null || iin.isBlank()) return "Unknown";
 
@@ -83,6 +89,7 @@ public class Analyzer {
             }
         });
     }
+
     private Map<String, List<String>> fetchRelationsForMainIin(String mainIin) {
         try {
             String primarySql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Связи_Семейные.getPath(), mainIin);
@@ -141,9 +148,21 @@ public class Analyzer {
         Map<String, String> dopinfo = relationRecord.getDopinfo();
         dopinfo.put("vid_sviazi", relationRecord.getVid_sviazi());
         int level = relationRecord.getLevel_rod();
-        if(level != 0){
+        if (level != 0) {
             dopinfo = null;
         }
+        boolean isNominal = portretService.isNominal(iin);
+        boolean isNominalUl = portretService.isNominalUl(iin);
+
+        List<String> labels = new ArrayList<>();
+        if (isNominal) {
+            labels.add("Номинал");
+        }
+        if (isNominalUl) {
+            labels.add("Подставной владелец");
+        }
+        String info = String.join(", ", labels);
+
         return RelationActive.builder()
                 .relation(relationRecord.getStatus())
                 .fio(getFioByIin(iin))
@@ -151,9 +170,8 @@ public class Analyzer {
                 .actives(totalActives != null ? numberConverter.formatNumber(totalActives) : "0")
                 .incomes(totalIncomes != null ? numberConverter.formatNumber(totalIncomes) : "0")
                 .dopinfo(dopinfo)
-                //.head(head)
                 .level(level)
-                .isNominal(portretService.isNominal(iin))
+                .info(info)
                 .build();
     }
 
@@ -231,93 +249,111 @@ public class Analyzer {
 
     private void processRecords(List<String> iins, String dateFrom, String dateTo, List<String> years,
                                 Set<String> sources, List<String> vids, List<String> types,
-                                List<InformationRecordDt> infoRecords, List<ESFInformationRecordDt> esfRecords,
+                                List<InformationRecordDt> infoRecords,
+                                List<ESFInformationRecordDt> esfRecords,
                                 List<NaoConRecordDt> naoConRecordDs,
                                 boolean isActive) {
-        List<String> effectiveYears = years != null && !years.isEmpty() ? years : List.of("");
 
+        // Use Sets to track unique records
+        Set<String> esfKeys = Collections.synchronizedSet(new HashSet<>());
+        Set<String> infoKeys = Collections.synchronizedSet(new HashSet<>());
+        Set<String> naoConKeys = Collections.synchronizedSet(new HashSet<>());
+
+        List<String> effectiveYears = years != null && !years.isEmpty() ? years : List.of("");
         String mainIin = iins.get(0);
+
         iins.forEach(currentIin -> {
             boolean isUl = IinChecker.isUl(currentIin);
+
             for (String year : effectiveYears) {
                 String effectiveDateFrom = year.isEmpty() ? dateFrom : year + "-01-01";
                 String effectiveDateTo = year.isEmpty() ? dateTo : year + "-12-31";
 
                 for (String source : sources) {
-                    List<Method> methods = isActive
-                            ? Dictionary.getActiveMethodsBySource().getOrDefault(source, List.of())
-                            : Dictionary.getIncomeMethodsBySource().getOrDefault(source, List.of());
+                    List<DataFetcher> fetchers = isActive
+                            ? fetcherRegistry.getActiveFetchers(source)
+                            : fetcherRegistry.getIncomeFetchers(source);
 
-                    for (Method method : methods) {
-                        ServiceMetadata metadata = method.getAnnotation(ServiceMetadata.class);
-                        if ((isActive && metadata.isActive()) || (!isActive && metadata.isIncome())) {
-                            if (vids != null && !vids.isEmpty() && Arrays.stream(metadata.vids()).noneMatch(vids::contains))
-                                continue;
-                            if (types != null && !types.isEmpty() && Arrays.stream(metadata.type()).noneMatch(types::contains))
-                                continue;
+                    for (DataFetcher fetcher : fetchers) {
+                        FetcherMetadata meta = fetcher.getMetadata();
 
-                            InformationalService service = Dictionary.getServiceBeans().values().stream()
-                                    .filter(s -> s.getClass().equals(method.getDeclaringClass()))
-                                    .findFirst()
-                                    .orElse(null);
-                            if (service == null) {
-                                log.error("Service not found for method {}", method.getName());
-                                continue;
-                            }
+                        // Filter by vids and types
+                        if (vids != null && !vids.isEmpty() &&
+                                Arrays.stream(meta.getVids()).noneMatch(vids::contains)) continue;
+                        if (types != null && !types.isEmpty() &&
+                                Arrays.stream(meta.getTypes()).noneMatch(types::contains)) continue;
 
-                            try {
-                                Object result = method.invoke(service, currentIin, effectiveDateFrom, effectiveDateTo);
-                                if (result instanceof List<?> resultList && !resultList.isEmpty()) {
-                                    Object first = resultList.get(0);
-                                    if (isActive && first instanceof ESFInformationRecordDt) {
-                                        List<ESFInformationRecordDt> filteredRecords;
+                        try {
+                            // Fetch data
+                            List<?> rawResult = fetcher.fetchData(currentIin, effectiveDateFrom, effectiveDateTo);
 
-                                        if (!isUl || mainIin.equals(currentIin)) {
-                                            filteredRecords = resultList.stream()
-                                                    .map(ESFInformationRecordDt.class::cast)
-                                                    .toList();
-                                            log.info("ESF: iin={} (isUl={}, main==current={}) → TAKING ALL {} records",
-                                                    currentIin, isUl, mainIin.equals(currentIin), resultList.size());
-                                        } else {
-                                            filteredRecords = resultList.stream()
-                                                    .map(ESFInformationRecordDt.class::cast)
-                                                    .filter(record ->
-                                                            (currentIin.equals(record.getIin_bin_pokup()) && mainIin.equals(record.getIin_bin_prod())) ||
-                                                                    (currentIin.equals(record.getIin_bin_prod()) && mainIin.equals(record.getIin_bin_pokup())))
-                                                    .toList();
-                                            log.info("ESF: iin={} (isUl={}, main!=current) → filtered: {} → {}",
-                                                    currentIin, isUl, resultList.size(), filteredRecords.size());
-                                        }
+                            if (rawResult.isEmpty()) continue;
 
-                                        synchronized (esfRecords) {
-                                            int before = esfRecords.size();
-                                            esfRecords.addAll(filteredRecords);
-                                            log.info("ESF list: {} → {} (added {})", before, esfRecords.size(), filteredRecords.size());
-                                        }
-                                    } else if (first instanceof InformationRecordDt) {
-                                        synchronized (infoRecords) {
-                                            infoRecords.addAll((List<InformationRecordDt>) resultList);
-                                            log.info("SIZE INFO: {}", infoRecords.size());
-                                        }
-                                    } else if (first instanceof NaoConRecordDt) {
-                                        List<NaoConRecordDt> filteredRecords = isUl
-                                                ? resultList.stream()
-                                                .map(NaoConRecordDt.class::cast)
-                                                .filter(record -> currentIin.equals(record.getIin_bin_pokup()) && mainIin.equals(record.getIin_bin_prod()) ||
-                                                        (currentIin.equals(record.getIin_bin_prod()) && mainIin.equals(record.getIin_bin_pokup())))
-                                                .toList()
-                                                : resultList.stream().map(NaoConRecordDt.class::cast).toList();
-                                        log.debug("NaoCon records for iin={}, isUl={}: {} records before filter, {} after",
-                                                currentIin, isUl, resultList.size(), filteredRecords.size());
-                                        synchronized (naoConRecordDs) {
-                                            naoConRecordDs.addAll(filteredRecords);
+                            // Apply filtering
+                            List<?> filteredResult = fetcher.filterRecords(rawResult, currentIin, mainIin, isUl);
+
+                            if (filteredResult.isEmpty()) continue;
+
+                            // Add to appropriate collection with deduplication
+                            Object first = filteredResult.get(0);
+                            if (first instanceof ESFInformationRecordDt) {
+                                synchronized (esfRecords) {
+                                    int before = esfRecords.size();
+                                    int added = 0;
+
+                                    for (Object obj : filteredResult) {
+                                        ESFInformationRecordDt record = (ESFInformationRecordDt) obj;
+                                        String key = RecordKeyGenerator.generateKey(record);
+
+                                        if (esfKeys.add(key)) {
+                                            esfRecords.add(record);
+                                            added++;
                                         }
                                     }
+
+                                    log.info("ESF list: {} → {} (added {} out of {} from {})",
+                                            before, esfRecords.size(), added, filteredResult.size(),
+                                            meta.getSources());
                                 }
-                            } catch (Exception e) {
-                                log.error("Failed to invoke method {} for IIN {}: {}", method.getName(), currentIin, e.getMessage());
-                                throw new RuntimeException("Failed to invoke service method: " + method.getName(), e);
+                            } else if (first instanceof InformationRecordDt) {
+                                synchronized (infoRecords) {
+                                    int added = 0;
+
+                                    for (Object obj : filteredResult) {
+                                        InformationRecordDt record = (InformationRecordDt) obj;
+                                        String key = RecordKeyGenerator.generateKey(record);
+
+                                        if (infoKeys.add(key)) {
+                                            infoRecords.add(record);
+                                            added++;
+                                        }
+                                    }
+
+                                    log.debug("Info records added: {} out of {} from {}",
+                                            added, filteredResult.size(), meta.getSources());
+                                }
+                            } else if (first instanceof NaoConRecordDt) {
+                                synchronized (naoConRecordDs) {
+                                    int added = 0;
+
+                                    for (Object obj : filteredResult) {
+                                        NaoConRecordDt record = (NaoConRecordDt) obj;
+                                        String key = RecordKeyGenerator.generateKey(record);
+
+                                        if (naoConKeys.add(key)) {
+                                            naoConRecordDs.add(record);
+                                            added++;
+                                        }
+                                    }
+
+                                    log.debug("NaoCon records added: {} out of {} from {}",
+                                            added, filteredResult.size(), meta.getSources());
+                                }
                             }
+
+                        } catch (Exception e) {
+                            log.error("Failed to fetch data from {} for IIN {}: {}",
+                                    source, currentIin, e.getMessage(), e);
                         }
                     }
                 }
@@ -433,7 +469,7 @@ public class Analyzer {
 
         Map<String, String> iinToFio = new HashMap<>(uniqueIins.size());
         uniqueIins.forEach(iin -> {
-            String  fio = getFioByIin(iin);
+            String fio = getFioByIin(iin);
             iinToFio.put(iin, fio);
         });
         return iinToFio;
@@ -817,7 +853,7 @@ public class Analyzer {
                                 .num_doc(esf.getNum_doc())
                                 .summ(esf.getSumm() != null ? numberConverter.formatNumber(esf.getSumm()) : null)
                                 .build();
-                    }else if (record instanceof NaoConRecordDt nao) {
+                    } else if (record instanceof NaoConRecordDt nao) {
                         return NaoConRecordDt.builder()
                                 .iin_bin(nao.getIin_bin())
                                 .name(getFioByIin(nao.getIin_bin()))
@@ -907,7 +943,7 @@ public class Analyzer {
     }
 
     private List<YearlyCount> calculateActiveYearlyCounts(String iin, String dateFrom, String dateTo,
-                                                          List<String> sources, List<String> types,  List<String> vids, List<String> iins) {
+                                                          List<String> sources, List<String> types, List<String> vids, List<String> iins) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
         List<ESFInformationRecordDt> allEsfRecords = new ArrayList<>();
         List<NaoConRecordDt> allNaoConRecords = new ArrayList<>();
@@ -1117,8 +1153,7 @@ public class Analyzer {
 
                             if (hasBuy && hasSell) {
                                 pairedRecords.addAll(kdRecords);
-                            }
-                            else if (!hasBuy && hasSell) {
+                            } else if (!hasBuy && hasSell) {
                                 pairedRecords.addAll(kdRecords);
                             }
                         }
@@ -1256,11 +1291,302 @@ public class Analyzer {
     public static List<ESFInformationRecordDt> keepDistinctEsf(List<ESFInformationRecordDt> esfInformationRecords) {
         return esfInformationRecords.stream().distinct().collect(Collectors.toList());
     }
+
     public static List<NaoConRecordDt> keepDistinctNao(List<NaoConRecordDt> naoConRecordDs) {
         return naoConRecordDs.stream().distinct().collect(Collectors.toList());
     }
 
     public static List<RelationRecord> keepDistinctRelations(List<RelationRecord> relationRecords) {
         return relationRecords.stream().distinct().collect(Collectors.toList());
+    }
+
+    public ActiveResponse mergeActiveResponses(
+            List<ActiveResponse> responses,
+            String mainIin,
+            List<String> allIins,
+            String dateFrom,
+            String dateTo,
+            List<String> years
+    ) {
+        if (responses == null || responses.isEmpty()) {
+            log.warn("⚠ No responses to merge");
+            return buildEmptyResponse(dateFrom, dateTo, years);
+        }
+
+        if (responses.size() == 1) {
+            log.info("✅ Only one response, returning as-is");
+            ActiveResponse single = responses.get(0);
+            setMergedIinToRelation(single, mainIin, allIins);
+            return single;
+        }
+
+        // Определяем тип первого response
+        ActiveResponse first = responses.get(0);
+        log.info("🔀 Merging {} responses of type: {}", responses.size(), first.getClass().getSimpleName());
+
+        if (first instanceof OverallActive) {
+            return mergeOverallActive(responses, mainIin, allIins, dateFrom, dateTo, years);
+        } else if (first instanceof ActiveWithRecords) {
+            return mergeActiveWithRecords(responses, mainIin, allIins, dateFrom, dateTo, years);
+        } else if (first instanceof ActiveCounts) {
+            return mergeActiveCounts(responses, mainIin, allIins, dateFrom, dateTo, years);
+        }
+
+        throw new IllegalArgumentException("Unknown ActiveResponse type: " + first.getClass());
+    }
+
+    /**
+     * Объединяет OverallActive (summary mode)
+     */
+    private ActiveResponse mergeOverallActive(
+            List<ActiveResponse> responses,
+            String mainIin,
+            List<String> allIins,
+            String dateFrom,
+            String dateTo,
+            List<String> years
+    ) {
+        // Собираем все RecordGroup из всех responses
+        Map<String, RecordGroup> mergedGroups = new HashMap<>();
+
+        for (ActiveResponse response : responses) {
+            OverallActive overall = (OverallActive) response;
+            if (overall.getRecordsByOper() != null) {
+                for (RecordGroup group : overall.getRecordsByOper()) {
+                    String key = group.getOper(); // Группируем по операции
+
+                    mergedGroups.merge(key, group, (existing, newGroup) -> {
+                        // Парсим totalSum из обеих групп
+                        BigDecimal existingSum = parseTotalSum(existing.getTotalSum());
+                        BigDecimal newSum = parseTotalSum(newGroup.getTotalSum());
+                        BigDecimal mergedSum = existingSum.add(newSum);
+
+                        // Парсим год (берем первый, если они одинаковые, или объединяем)
+                        String mergedYear = mergeYears(existing.getYear(), newGroup.getYear());
+
+                        // Объединяем iinsInvolved
+                        String mergedIins = mergeIinsInvolved(existing.getIinsInvolved(), newGroup.getIinsInvolved());
+
+                        // Объединяем info (если нужно)
+                        String mergedInfo = mergeInfo(existing.getInfo(), newGroup.getInfo());
+
+                        return RecordGroup.builder()
+                                .oper(existing.getOper())
+                                .year(mergedYear)
+                                .totalSum(formatTotalSum(mergedSum))
+                                .iinsInvolved(mergedIins)
+                                .info(mergedInfo)
+                                .build();
+                    });
+                }
+            }
+        }
+
+        List<RecordGroup> mergedList = new ArrayList<>(mergedGroups.values());
+
+        OverallActive result = OverallActive.builder()
+                .dateFrom(dateFrom)
+                .dateTo(dateTo)
+                .selectedYears(years)
+                .recordsByOper(mergedList)
+                .build();
+
+        setMergedIinToRelation(result, mainIin, allIins);
+
+        log.info("✅ Merged OverallActive: {} groups", mergedList.size());
+
+        return result;
+    }
+
+    /**
+     * Парсит totalSum из строки в BigDecimal
+     */
+    private BigDecimal parseTotalSum(String totalSum) {
+        if (totalSum == null || totalSum.isBlank()) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            // Удаляем пробелы, запятые и другие символы форматирования
+            String cleaned = totalSum.replaceAll("[^0-9.-]", "");
+            return new BigDecimal(cleaned);
+        } catch (NumberFormatException e) {
+            log.warn("Failed to parse totalSum: {}", totalSum);
+            return BigDecimal.ZERO;
+        }
+    }
+
+    /**
+     * Форматирует BigDecimal обратно в строку
+     */
+    private String formatTotalSum(BigDecimal sum) {
+        if (sum == null) {
+            return "0";
+        }
+        // Форматируем с разделителями тысяч (опционально)
+        DecimalFormat formatter = new DecimalFormat("#,###.##");
+        return formatter.format(sum);
+    }
+
+    /**
+     * Объединяет года
+     */
+    private String mergeYears(String year1, String year2) {
+        if (year1 == null || year1.isBlank()) return year2;
+        if (year2 == null || year2.isBlank()) return year1;
+        if (year1.equals(year2)) return year1;
+
+        // Если года разные, объединяем их
+        Set<String> years = new TreeSet<>();
+        years.addAll(Arrays.asList(year1.split(",")));
+        years.addAll(Arrays.asList(year2.split(",")));
+        return String.join(",", years);
+    }
+
+    /**
+     * Объединяет список IIN
+     */
+    private String mergeIinsInvolved(String iins1, String iins2) {
+        Set<String> allIins = new LinkedHashSet<>();
+
+        if (iins1 != null && !iins1.isBlank()) {
+            allIins.addAll(Arrays.asList(iins1.split(",")));
+        }
+        if (iins2 != null && !iins2.isBlank()) {
+            allIins.addAll(Arrays.asList(iins2.split(",")));
+        }
+
+        return String.join(",", allIins);
+    }
+
+    /**
+     * Объединяет info
+     */
+    private String mergeInfo(String info1, String info2) {
+        if (info1 == null || info1.isBlank()) return info2;
+        if (info2 == null || info2.isBlank()) return info1;
+        if (info1.equals(info2)) return info1;
+
+        // Если info разные, можно объединить через точку с запятой
+        return info1 + "; " + info2;
+    }
+
+    /**
+     * Объединяет ActiveWithRecords (detailed mode)
+     */
+    private ActiveResponse mergeActiveWithRecords(
+            List<ActiveResponse> responses,
+            String mainIin,
+            List<String> allIins,
+            String dateFrom,
+            String dateTo,
+            List<String> years
+    ) {
+        // Собираем все записи из всех responses
+        List<RecordDt> allRecords = responses.stream()
+                .filter(r -> r instanceof ActiveWithRecords)
+                .map(r -> (ActiveWithRecords) r)
+                .flatMap(r -> r.getRecordsByOper() != null ? r.getRecordsByOper().stream() : Stream.empty())
+                .sorted(Comparator.comparing(RecordDt::getDate, Comparator.nullsLast(Comparator.naturalOrder())))
+                .distinct() // Убираем возможные дубликаты
+                .collect(Collectors.toList());
+
+        ActiveWithRecords result = ActiveWithRecords.builder()
+                .dateFrom(dateFrom)
+                .dateTo(dateTo)
+                .selectedYears(years)
+                .recordsByOper(allRecords)
+                .build();
+
+        setMergedIinToRelation(result, mainIin, allIins);
+
+        log.info("✅ Merged ActiveWithRecords: {} total records", allRecords.size());
+
+        return result;
+    }
+
+    /**
+     * Объединяет ActiveCounts
+     */
+    private ActiveResponse mergeActiveCounts(
+            List<ActiveResponse> responses,
+            String mainIin,
+            List<String> allIins,
+            String dateFrom,
+            String dateTo,
+            List<String> years
+    ) {
+        // Собираем все ActiveCountGroup из всех responses
+        Map<String, ActiveCountGroup> mergedCounts = new HashMap<>();
+
+        for (ActiveResponse response : responses) {
+            ActiveCounts counts = (ActiveCounts) response;
+            if (counts.getAktivyTypeCounts() != null) {
+                for (ActiveCountGroup group : counts.getAktivyTypeCounts()) {
+                    String key = group.getType(); // Группируем по типу
+
+                    mergedCounts.merge(key, group, (existing, newGroup) -> {
+                        // Объединяем счетчики
+                        return ActiveCountGroup.builder()
+                                .type(existing.getType())
+                                .count(existing.getCount() + newGroup.getCount())
+                                .build();
+                    });
+                }
+            }
+        }
+
+        List<ActiveCountGroup> mergedList = new ArrayList<>(mergedCounts.values());
+
+        ActiveCounts result = ActiveCounts.builder()
+                .dateFrom(dateFrom)
+                .dateTo(dateTo)
+                .selectedYears(years)
+                .aktivyTypeCounts(mergedList)
+                .build();
+
+        setMergedIinToRelation(result, mainIin, allIins);
+
+        log.info("✅ Merged ActiveCounts: {} type groups", mergedList.size());
+
+        return result;
+    }
+
+    /**
+     * Устанавливает iinToRelation для объединенного результата
+     */
+    private void setMergedIinToRelation(ActiveResponse response, String mainIin, List<String> allIins) {
+        Map<String, List<String>> iinToRelation = new HashMap<>();
+
+        // Основной IIN
+        iinToRelation.put(mainIin, List.of("Self"));
+
+        // Остальные IIN (если есть логика определения родства, добавьте её)
+        if (allIins != null) {
+            for (String iin : allIins) {
+                if (!iin.equals(mainIin)) {
+                    iinToRelation.putIfAbsent(iin, List.of("Related")); // или ваша логика
+                }
+            }
+        }
+
+        if (response instanceof OverallActive) {
+            ((OverallActive) response).setIinToRelation(iinToRelation);
+        } else if (response instanceof ActiveWithRecords) {
+            ((ActiveWithRecords) response).setIinToRelation(iinToRelation);
+        } else if (response instanceof ActiveCounts) {
+            ((ActiveCounts) response).setIinToRelation(iinToRelation);
+        }
+    }
+
+    /**
+     * Создает пустой response для случая когда нет данных
+     */
+    private ActiveResponse buildEmptyResponse(String dateFrom, String dateTo, List<String> years) {
+        return OverallActive.builder()
+                .dateFrom(dateFrom)
+                .dateTo(dateTo)
+                .selectedYears(years)
+                .recordsByOper(new ArrayList<>())
+                .build();
     }
 }

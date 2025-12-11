@@ -21,7 +21,7 @@ public class RelationController {
 
     @LogRequest
     @PostMapping("/primary")
-    @Cacheable(value = "primaryRelations", key = "#mainRequest")
+    @Cacheable(value = "primaryRelations", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<RelationActiveWithTypes> allPrimaryRelationsOfPerson(@RequestBody MainRequest mainRequest) throws IOException {
         return ResponseEntity.ok().body(relationService.getPrimaryRelationsOfPerson(
                 mainRequest.getIin_bin(),
@@ -31,7 +31,7 @@ public class RelationController {
 
     @LogRequest
     @PostMapping("/secondary")
-    @Cacheable(value = "secondaryRelations", key = "#mainRequest")
+    @Cacheable(value = "secondaryRelations", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<?> allSecondaryRelationsOfPerson(@RequestBody MainRequest mainRequest) throws IOException {
         RelationActiveWithTypes active = relationService.getSecondaryRelationsOfPerson(
                 mainRequest.getIin_bin(),

@@ -35,6 +35,8 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.info.infobaza.constants.Dictionary.RU;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -128,13 +130,6 @@ public class ExcelExportServiceImpl implements ExcelExportService {
 
         log.info("exportToExcel() finished in {} ms", (System.currentTimeMillis() - startTotal));
     }
-
-    // === В начало класса добавь ===
-    private static final String TIME_FORMAT = "⏱ [{}] took {} ms";
-    private static final String SECTION_START = "Starting {} for IIN: {}";
-    private static final String SECTION_END = "Completed {} for IIN: {} in {} ms";
-
-    // === В exportToExcelMass ===
     @Override
     public void exportToExcelMass(OutputStream outputStream, MassExportRequest request) throws IOException {
         long totalStart = System.currentTimeMillis();
@@ -184,7 +179,6 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             } catch (Exception e) {
                 log.warn("Failed to fetch relations for IIN {}: {}", iinInput, e.getMessage());
             }
-            log.info(TIME_FORMAT, "Relations fetch", (System.currentTimeMillis() - relStart));
 
             log.info("all iins: {}", iinsToProcess);
             // === 2. Обрабатываем каждый IIN последовательно ===
@@ -211,7 +205,6 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                         iin, dateFrom, dateTo, yearsIncome, null, null, request.getIins());
 
                 long fetchEnd = System.currentTimeMillis();
-                log.info(TIME_FORMAT, "All data fetched", (fetchEnd - iinStart));
 
                 // === Запись в Excel ===
                 long writeStart = System.currentTimeMillis();
@@ -222,7 +215,6 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                 rowIndex = addActivesAndIncomesSection(sheet, rowIndex, actives, incomes);
                 rowIndex = addJobInformationSection(sheet, rowIndex, pensions, headFl, industry, turnovers);
                 rowIndex++;
-                log.info(TIME_FORMAT, "Excel write", (System.currentTimeMillis() - writeStart));
 
                 log.info("Completed IIN {} in {} ms", iin, (System.currentTimeMillis() - iinStart));
             }
@@ -238,36 +230,10 @@ public class ExcelExportServiceImpl implements ExcelExportService {
         workbook.write(outputStream);
         workbook.close();
         workbook.dispose();
-        log.info(TIME_FORMAT, "Workbook write & dispose", (System.currentTimeMillis() - finalStart));
 
         long totalTime = (System.currentTimeMillis() - totalStart) / 1000;
         log.info("Mass export completed in {} seconds for {} unique IIN(s)", totalTime, processedIINs.size());
     }
-
-    // === Универсальный метод с логами для CompletableFuture ===
-    private <T> CompletableFuture<T> logFuture(String name, String iin, ThrowingSupplier<T> supplier) {
-        long start = System.currentTimeMillis();
-        log.info(SECTION_START, name, iin);
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                T result = supplier.get();
-                log.info(SECTION_END, name, iin, (System.currentTimeMillis() - start));
-                return result;
-            } catch (Exception e) {
-                log.error("Failed {} for IIN {}: {}", name, iin, e.getMessage());
-                throw new RuntimeException(e);
-            }
-        });
-    }
-
-    // === Функциональный интерфейс для исключений ===
-    @FunctionalInterface
-    private interface ThrowingSupplier<T> {
-        T get() throws IOException;
-    }
-
-    // ==================== УНИВЕРСАЛЬНЫЕ МЕТОДЫ ====================
-
     private int addPortraitSection(Workbook workbook, Sheet sheet, int rowIndex, Person person) {
         rowIndex = addBoldRow(sheet, rowIndex, "Портрет");
 
@@ -280,6 +246,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
         info.append("ИИН: ").append(orDash(person.getIin())).append("\n");
         info.append("Портрет: ").append(person.getPortret() != null ? String.join(", ", person.getPortret()) : "Отсутствует").append("\n");
         info.append("Номинал: ").append(person.getIsNominal() != null && person.getIsNominal() ? "Да" : "Нет").append("\n");
+        info.append("Подставной владелец: ").append(person.getIsNominalUl() != null && person.getIsNominalUl() ? "Да" : "Нет").append("\n");
         info.append("Крипта: ").append(person.getIsCryptoActive() ? "Есть" : "Нет");
 
         infoCell.setCellValue(info.toString());
@@ -317,7 +284,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             setCell(header, 2, "ИИН", true);
             setCell(header, 3, "Активы", true);
             setCell(header, 4, "Доходы", true);
-            setCell(header, 5, "Номинал", true);
+            setCell(header, 5, "Сведения", true);
             setCell(header, 6, "Доп Инфо", true);
 
             for (RelationActive ra : relations) {
@@ -327,8 +294,8 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                 setCell(r, 2, orDash(ra.getIin()), false);
                 setCell(r, 3, orDash(ra.getActives()), false);
                 setCell(r, 4, orDash(ra.getIncomes()), false);
-                setCell(r, 5, ra.isNominal() ? "Да" : "Нет", false);
-                setCell(r, 6, formatDopinfo(ra.getDopinfo()), false);
+                setCell(r, 5, orDash(ra.getInfo()), false);
+                setCell(r, 6, formatDopinfo(ra), false);
             }
         }
         return rowIndex;
@@ -448,7 +415,6 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                 : addRow(sheet, rowIndex, "Нет данных");
         rowIndex++;
 
-        rowIndex = addBoldRow(sheet, rowIndex, "Руководящие позиции:");
         rowIndex = headFl != null && !headFl.isEmpty() ? addHeadInformationTable(sheet, rowIndex, headFl)
                 : addRow(sheet, rowIndex, "Нет информации");
         rowIndex++;
@@ -466,6 +432,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
             setCell(h, 0, "ИИН/БИН", true);
             setCell(h, 1, "Тип позиции", true);
             setCell(h, 2, "ИИН/БИН налогопл.", true);
+            setCell(h, 3, "Подставной владелец", true);
             setCell(h, 4, "Наименование", true);
 
             for (var s : headFl.getHead()) {
@@ -473,6 +440,7 @@ public class ExcelExportServiceImpl implements ExcelExportService {
                 setCell(r, 0, s.getIin_bin(), false);
                 setCell(r, 1, s.getPositionType(), false);
                 setCell(r, 2, s.getTaxpayer_iin_bin(), false);
+                setCell(r, 3, s.isNominal() ? "Да" : "Нет", false);
                 setCell(r, 4, s.getTaxpayerName(), false);
             }
         }
@@ -585,9 +553,72 @@ public class ExcelExportServiceImpl implements ExcelExportService {
         return value == null || (value instanceof String s && s.isBlank()) ? "-" : value.toString();
     }
 
-    private String formatDopinfo(Map<String, String> map) {
-        return map == null || map.isEmpty() ? "-" :
-                map.entrySet().stream().map(e -> e.getKey() + ": " + e.getValue()).collect(Collectors.joining("; "));
+    private String formatDopinfo(RelationActive ra) {
+        if (ra.getDopinfo() == null || ra.getDopinfo().isEmpty()) return "-";
+
+        Map<String, List<String>> splitted = new LinkedHashMap<>();
+        ra.getDopinfo().forEach((k, v) -> {
+            if (!"vid_sviazi".equals(k)) {
+                splitted.put(k, v == null ? List.of() : Arrays.stream(v.split("\\|"))
+                        .map(String::trim)
+                        .filter(s -> !s.isBlank())
+                        .toList());
+            }
+        });
+
+        int max = splitted.values().stream().mapToInt(List::size).max().orElse(0);
+        if (max == 0) return "-";
+
+        List<String> lines = new ArrayList<>();
+        List<String> dates = splitted.getOrDefault("Operation date", List.of());
+        List<String> sums = splitted.getOrDefault("Operation summ", List.of());
+        List<String> purposes = splitted.getOrDefault("Operation name", List.of());
+
+        for (int i = 0; i < max; i++) {
+            StringBuilder sb = new StringBuilder();
+            sb.append((i + 1)).append(". ");
+
+            String rel = ra.getRelation();
+            if (rel.contains("Поступили")) sb.append("Поступили ДС");
+            else if (rel.contains("Перечислил")) sb.append("Перечислил ДС");
+            else sb.append(rel.split(" \\(")[0]);
+
+            if (i < dates.size() && !dates.get(i).isBlank()) {
+                String d = dates.get(i).substring(0, 10);
+                sb.append(" • ").append(d.substring(8)).append(".")
+                        .append(d.substring(5, 7)).append(".")
+                        .append(d.substring(0, 4));
+            }
+
+            if (i < sums.size() && !sums.get(i).isBlank()) {
+                String sum = sums.get(i).replaceAll("\\D", "");
+                if (!sum.isEmpty()) {
+                    String formatted = String.format("%,d", Long.parseLong(sum)).replace(",", " ");
+                    sb.append(" • ").append(formatted).append(" ₸");
+                }
+            }
+
+            if (i < purposes.size() && !purposes.get(i).isBlank()) {
+                sb.append(" • ").append(purposes.get(i));
+            }
+
+            List<String> order = List.of("AP code", "Registration date", "End registration date", "GRNZ", "Save begin date",
+                    "Save end date", "VIN code", "Summ", "For", "Number", "Tax for", "BVU", "Tax number", "UGD", "KNP", "KBK",
+                    "Purpose of tax", "For_dover", "Registration_date");
+
+            for (String key : order) {
+                if (splitted.containsKey(key) && i < splitted.get(key).size()) {
+                    String val = splitted.get(key).get(i);
+                    if (!val.isBlank()) {
+                        sb.append(" • ").append(RU.getOrDefault(key, key)).append(": ").append(val);
+                    }
+                }
+            }
+
+            lines.add(sb.toString());
+        }
+
+        return String.join("\n", lines);
     }
 
     private boolean hasRelations(RelationActiveWithTypes rel) {

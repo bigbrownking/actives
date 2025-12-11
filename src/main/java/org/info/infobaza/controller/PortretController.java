@@ -63,7 +63,7 @@ public class PortretController {
 
     @LogRequest
     @PostMapping("/car")
-    @Cacheable(value = "car", key = "#request")
+    @Cacheable(value = "car", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<CarResponse> getCarInfo(
             @AuthenticationPrincipal UserDetailsImpl userDetails,
             @RequestBody FindCarRequest request) throws IOException {
@@ -90,7 +90,7 @@ public class PortretController {
 
     @LogRequest
     @PostMapping("/house")
-    @Cacheable(value = "house", key = "#request")
+    @Cacheable(value = "house", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<HousePortret> getHouseInfo(
             @AuthenticationPrincipal UserDetailsImpl userDetails,
             @RequestBody FindHouseRequest request) throws IOException {

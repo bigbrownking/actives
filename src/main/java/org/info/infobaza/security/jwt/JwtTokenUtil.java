@@ -5,8 +5,6 @@ import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.info.infobaza.model.dossier.User;
-import org.info.infobaza.repository.dossier.UserDossierRepository;
 import org.info.infobaza.repository.main.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -22,7 +20,6 @@ import java.util.Optional;
 @Slf4j
 @RequiredArgsConstructor
 public class JwtTokenUtil {
-    private final UserDossierRepository userRepository;
     private final UserRepository userMainRepository;
 
     @Value("${jwt.public.key}")
@@ -126,29 +123,6 @@ public class JwtTokenUtil {
             throw new IllegalArgumentException("JWT secret key must be at least 64 bytes for HS256 algorithm");
         }
         return Keys.hmacShaKeyFor(keyBytes);
-    }
-
-    public String generateDossierJwtToken() {
-        User user = userRepository.findByUsernameTwo(ADMIN);
-        if (user == null) {
-            log.error("User not found for username: {}", ADMIN);
-            throw new IllegalStateException("Dossier admin user not found");
-        }
-        Integer tokenVersion = user.getTokenVersion() != null ? user.getTokenVersion() : 0;
-
-        int expiration = jwtExpirationMs;
-
-        return Jwts.builder()
-                .setSubject(user.getIin())
-                .setHeader(header)
-                .claim("user_id", user.getId())
-                .claim("tokenVersion", tokenVersion)
-                .claim("token_type", "access")
-                .claim("jti", "364219c66b1b4e3d9159816490360768")
-                .setIssuedAt(new Date())
-                .setExpiration(new Date((new Date()).getTime() + expiration))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
-                .compact();
     }
 
 //    public String generateTokenFromUsername(String username) {

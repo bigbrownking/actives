@@ -4,29 +4,23 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.dto.request.FindCarRequest;
 import org.info.infobaza.dto.request.FindHouseRequest;
-import org.info.infobaza.dto.response.info.car.*;
-import org.info.infobaza.dto.response.info.house.*;
+import org.info.infobaza.dto.response.info.car.CarInfo;
+import org.info.infobaza.dto.response.info.car.CarPortret;
+import org.info.infobaza.dto.response.info.car.CarPortretPiece;
+import org.info.infobaza.dto.response.info.house.HouseHistory;
+import org.info.infobaza.dto.response.info.house.HousePortret;
+import org.info.infobaza.dto.response.info.house.HousePortretPiece;
 import org.info.infobaza.dto.response.person.Person;
-import org.info.infobaza.model.info.active_income.InformationRecordDt;
 import org.info.infobaza.model.info.active_income.NaoConRecordDt;
 import org.info.infobaza.model.info.object.Car;
 import org.info.infobaza.model.info.object.CarInsurance;
-import org.info.infobaza.model.info.object.CarInsuranceSummary;
 import org.info.infobaza.service.cars.CarService;
-import org.info.infobaza.service.gkb_auto.GKBAUTOService;
-import org.info.infobaza.service.kap_mvd_auto.KAPMVDAUTOService;
 import org.info.infobaza.service.nao_con.NaoConService;
 import org.info.infobaza.service.portret.PortretService;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.time.LocalDate;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Component

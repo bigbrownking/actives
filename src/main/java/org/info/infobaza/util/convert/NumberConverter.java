@@ -1,6 +1,5 @@
 package org.info.infobaza.util.convert;
 
-import jakarta.persistence.Column;
 import org.info.infobaza.dto.response.person.Age;
 import org.springframework.stereotype.Component;
 

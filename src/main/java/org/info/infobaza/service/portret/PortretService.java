@@ -1,8 +1,5 @@
 package org.info.infobaza.service.portret;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,19 +7,17 @@ import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.dto.response.info.IinInfo;
 import org.info.infobaza.dto.response.person.Age;
 import org.info.infobaza.dto.response.person.Person;
-import org.info.infobaza.exception.NotFoundException;
-import org.info.infobaza.model.info.active_income.InformationRecordDt;
-import org.info.infobaza.model.info.active_income.NaoConRecordDt;
+import org.info.infobaza.model.dossierprime.MvFl;
+import org.info.infobaza.model.dossierprime.MvFlWithPhotoDto;
+import org.info.infobaza.model.dossierprime.PhotoDb;
+import org.info.infobaza.model.dossierprime.ULDto;
 import org.info.infobaza.model.info.job.CompanyRecord;
 import org.info.infobaza.model.info.job.SupervisorRecord;
-import org.info.infobaza.model.info.person.DossierPerson;
 import org.info.infobaza.model.info.person.PersonRecord;
 import org.info.infobaza.model.info.person.nominal.Nominal;
 import org.info.infobaza.model.info.person.nominal.NominalRucUchr;
-import org.info.infobaza.security.jwt.JwtTokenUtil;
-import org.info.infobaza.service.cars.CarService;
+import org.info.infobaza.service.DossierService;
 import org.info.infobaza.service.enpf.HeadService;
-import org.info.infobaza.service.nao_con.NaoConService;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.util.convert.NumberConverter;
 import org.info.infobaza.util.convert.SQLFileUtil;
@@ -30,17 +25,17 @@ import org.info.infobaza.util.date.DateUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static org.info.infobaza.util.convert.IinChecker.isUl;
+
 
 @Service
 @Slf4j
@@ -51,9 +46,8 @@ public class PortretService {
     private final SQLFileUtil sqlFileUtil;
     private final DateUtil dateUtil;
     private final Mapper mapper;
-    private final RestTemplate restTemplate;
-    private final JwtTokenUtil jwtTokenUtil;
     private HeadService headService;
+    private final DossierService dossierService;
     private final NumberConverter numberConverter;
     private static final String IIN_PATTERN = "\\d{12}";
 
@@ -116,86 +110,84 @@ public class PortretService {
 
     private FetchResult fetchEntityData(String iin) throws IOException {
         FetchResult result = new FetchResult();
-
-        // Step 1: Try dossier person
-        try {
-            DossierPerson dossierPerson = constructDossierPerson(iin);
-            String fullName = String.format("%s %s %s",
-                    dossierPerson.getLastName() != null ? dossierPerson.getLastName() : "",
-                    dossierPerson.getFirstName() != null ? dossierPerson.getFirstName() : "",
-                    dossierPerson.getPatronymic() != null ? dossierPerson.getPatronymic() : "").trim();
-            if (!fullName.isEmpty()) {
-                result.setFullName(fullName);
-                result.setAge(dossierPerson.getAge());
-                result.setPhoto(dossierPerson.getPhoto());
-                result.setType("PERSON");
-                log.info("Fetched person details from dossier for IIN: {}", iin);
-                return result;
-            }
-        } catch (NotFoundException e) {
-            log.debug("No person found in dossier for IIN: {}", iin);
-        } catch (Exception e) {
-            log.error("Error fetching dossier person for IIN: {}", iin, e);
-        }
-
-        // Step 2: Try fetchFIO_FL and fetchAge
-        String fio = fetchFIO_FL(iin);
-        if (fio != null && !fio.trim().isEmpty()) {
-            result.setFullName(fio);
-            result.setAge(fetchAge(iin));
-            result.setType("PERSON");
-            log.info("Fetched person FIO '{}' from fetchFIO_FL for IIN: {}", fio, iin);
-            return result;
-        }
-
-        // Step 3: Try dossier UL
-        try {
-            String jsonResponse = getDossierULContent(iin);
-
-            if (jsonResponse != null && !jsonResponse.trim().isEmpty()) {
-                JsonNode rootNode = new ObjectMapper().readTree(jsonResponse);
-                JsonNode companyNode = rootNode.get(0);
-
-                if (companyNode != null) {
-                    String companyName = companyNode.path("fullName").asText(null);
-                    if (companyName != null && !companyName.trim().isEmpty()) {
-                        result.setFullName(companyName.trim());
+        if(isUl(iin)){
+            try {
+                List<ULDto> ulList = dossierService.findUlByBin(iin);
+                if (ulList != null && !ulList.isEmpty()) {
+                    ULDto ul = ulList.get(0);
+                    if (ul.getFullName() != null && !ul.getFullName().trim().isEmpty()) {
+                        result.setFullName(ul.getFullName().trim());
                         result.setType("COMPANY");
-                        log.info("Fetched company name '{}' from dossier UL for IIN: {}", companyName, iin);
+                        log.info("Fetched COMPANY from DossierService: {}", ul.getFullName());
                         return result;
                     }
-                    log.debug("Company found but fullName is empty or null for IIN: {}", iin);
-                } else {
-                    log.debug("No company record found in JSON array for IIN: {}", iin);
                 }
-            } else {
-                log.debug("getDossierULContent returned null or empty for IIN: {}", iin);
+            } catch (Exception e) {
+                log.warn("Error fetching UL from DossierService for BIN: {}", iin, e);
+            }
+            String companyName = fetchFIO_UL(iin);
+            if (companyName != null && !companyName.trim().isEmpty()) {
+                result.setFullName(companyName);
+                result.setType("COMPANY");
+                log.info("Fetched company name '{}' from fetchFIO_UL for IIN: {}", companyName, iin);
+                return result;
             }
 
-        } catch (Exception e) {
-            log.error("Error fetching company dossier for IIN {}: {}", iin, e.getMessage());
-        }
-
-
-        // Step 4: Try fetchFIO_UL
-        String companyName = fetchFIO_UL(iin);
-        if (companyName != null && !companyName.trim().isEmpty()) {
-            result.setFullName(companyName);
-            result.setType("COMPANY");
-            log.info("Fetched company name '{}' from fetchFIO_UL for IIN: {}", companyName, iin);
+            String companyNameRucUchr = fetchFIO_UL_RUC_UHCR(iin);
+            if(companyNameRucUchr != null && !companyNameRucUchr.trim().isEmpty()){
+                result.setFullName(companyNameRucUchr);
+                result.setType("COMPANY");
+                log.info("Fetched company name '{}' from fetchFIO_UL_RUC_UCHR for IIN: {}", companyName, iin);
+                return result;
+            }
             return result;
         }
+        else {
+            try {
+                MvFlWithPhotoDto flDto = dossierService.getMvFl(iin);
+                if (flDto != null && flDto.getMvFlList() != null && !flDto.getMvFlList().isEmpty()) {
+                    MvFl fl = flDto.getMvFlList().get(0);
 
-        String companyNameRucUchr = fetchFIO_UL_RUC_UHCR(iin);
-        if(companyNameRucUchr != null && !companyNameRucUchr.trim().isEmpty()){
-            result.setFullName(companyNameRucUchr);
-            result.setType("COMPANY");
-            log.info("Fetched company name '{}' from fetchFIO_UL_RUC_UCHR for IIN: {}", companyName, iin);
-            return result;
+                    String fullName = String.format("%s %s %s",
+                            s(fl.getLast_name()),
+                            s(fl.getFirst_name()),
+                            s(fl.getPatronymic())).trim();
+
+                    if (!fullName.isBlank()) {
+                        Age age = calculateAge(fl.getBirth_date(), fl.getDeath_date());
+                        String photoBase64 = extractPhoto(flDto.getPhotoDbs());
+
+                        result.setFullName(fullName);
+                        result.setAge(age);
+                        result.setPhoto(photoBase64);
+                        result.setType("PERSON");
+                        log.info("Fetched PERSON from DossierService: {}", fullName);
+                        return result;
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error fetching FL from DossierService for IIN: {}", iin, e);
+            }
+            String fio = fetchFIO_FL(iin);
+            if (fio != null && !fio.trim().isEmpty()) {
+                result.setFullName(fio);
+                result.setAge(fetchAge(iin));
+                result.setType("PERSON");
+                log.info("Fetched person FIO '{}' from fetchFIO_FL for IIN: {}", fio, iin);
+                return result;
+            }
         }
+        result.setType("UNKNOWN");
+        result.setAge(null);
+        result.setPhoto(null);
+        result.setFullName("UNKNOWN");
+
         return result;
     }
 
+    private String s(String str) {
+        return str != null ? str.trim() : "";
+    }
     private List<String> fetchPortrets(String iin) {
         try {
             String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Портрет_Общий.getPath(), iin);
@@ -209,6 +201,42 @@ public class PortretService {
             return Collections.emptyList();
         }
     }
+    private Age calculateAge(String birthDateStr, String deathDateStr) {
+        if (birthDateStr == null || birthDateStr.isBlank()) return null;
+        try {
+            LocalDate birthDate = dateUtil.formatPortretDate(birthDateStr);
+            LocalDate deathDate = deathDateStr != null ? dateUtil.formatPortretDate(deathDateStr) : null;
+            return numberConverter.getAgeByDates(new LocalDate[]{birthDate, deathDate});
+        } catch (Exception e) {
+            log.error("Failed to calculate age for dates: {} / {}", birthDateStr, deathDateStr, e);
+            return null;
+        }
+    }
+
+    private String extractPhoto(List<PhotoDb> photoDbs) {
+        if (photoDbs == null || photoDbs.isEmpty()) {
+            return null;
+        }
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+
+        Optional<PhotoDb> latestPhoto = photoDbs.stream()
+                .filter(Objects::nonNull)
+                .filter(p -> p.getPhoto() != null && p.getPhoto().length > 0)
+                .filter(p -> p.getDate() != null && !p.getDate().trim().isEmpty())
+                .max(Comparator.comparing(
+                        p -> {
+                            try {
+                                return LocalDate.parse(p.getDate().trim(), formatter);
+                            } catch (DateTimeParseException e) {
+                                return LocalDate.MIN;
+                            }
+                        }
+                ));
+
+        return latestPhoto.map(photoDb -> Base64.getEncoder().encodeToString(photoDb.getPhoto())).orElse(null);
+    }
+
 
     private boolean fetchTurnover(String iin) {
         try {
@@ -240,89 +268,6 @@ public class PortretService {
             throw new IllegalArgumentException("IIN must be a 12-digit number");
         }
     }
-
-    private DossierPerson constructDossierPerson(String iin) throws JsonProcessingException, NotFoundException {
-        String jsonResponse = getDossierFLContent(iin);
-        JsonNode rootNode = new ObjectMapper().readTree(jsonResponse);
-
-        JsonNode mvFlNode = rootNode.path("mvFlList").get(0);
-        if (mvFlNode == null) {
-            log.warn("No person record found in mvFlList for IIN: {}", iin);
-            throw new NotFoundException("No person found with IIN " + iin);
-        }
-
-        String firstName = mvFlNode.path("first_name").asText(null);
-        String lastName = mvFlNode.path("last_name").asText(null);
-        String patronymic = mvFlNode.path("patronymic").asText(null);
-        String birthDateStr = mvFlNode.path("birth_date").asText(null);
-        String deathDateStr = mvFlNode.path("death_date").asText(null);
-
-        Age age = null;
-        if (birthDateStr != null && !birthDateStr.isEmpty()) {
-            try {
-                LocalDate birthDate = dateUtil.formatPortretDate(birthDateStr);
-                LocalDate deathDate = dateUtil.formatPortretDate(deathDateStr);
-                age = numberConverter.getAgeByDates(new LocalDate[]{birthDate, deathDate});
-            } catch (Exception e) {
-                log.error("Failed to parse birth/death dates for IIN: {}. Error: {}", iin, e.getMessage());
-            }
-        }
-
-        String photo = null;
-        JsonNode photoDbNode = rootNode.path("photoDbs").get(0);
-        if (photoDbNode != null) {
-            photo = photoDbNode.path("photo").asText(null);
-            if (photo != null && photo.isEmpty()) {
-                photo = null;
-                log.warn("Photo field is empty for IIN: {}", iin);
-            } else {
-                log.info("Extracted photo for IIN: {}", iin);
-            }
-        }
-
-        return new DossierPerson(firstName, lastName, patronymic, birthDateStr, deathDateStr, age, photo);
-    }
-
-    private String getDossierFLContent(String iin) {
-        validateIin(iin);
-        return fetchDossierContent(iin, "http://192.168.122.47:8082/api/pandora/dossier/get-fl-by-iin", "IIN");
-    }
-
-    private String getDossierULContent(String bin) {
-        validateIin(bin);
-        return fetchDossierContent(bin, "http://192.168.122.47:8082/api/pandora/dossier/ul/find-by-bin", "BIN");
-    }
-
-    private String fetchDossierContent(String identifier, String dossierUrl, String identifierType) {
-        String dossierToken = jwtTokenUtil.generateDossierJwtToken();
-        log.info("Generated token for {}: {}", identifierType, dossierToken);
-        if (dossierToken == null || dossierToken.isEmpty()) {
-            log.error("Access token not generated for {}", identifierType);
-            throw new IllegalStateException("Access token is not configured");
-        }
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Authorization", "Bearer " + dossierToken);
-
-        String url = dossierUrl + "?" + identifierType.toLowerCase() + "=" + identifier;
-        log.info("Sending GET request to: {}", url);
-
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(null, headers), String.class);
-            if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("Successfully fetched dossier content for {}: {}", identifierType, identifier);
-                return response.getBody();
-            }
-            log.error("Failed to fetch dossier for {}: {}. Status: {}", identifierType, identifier, response.getStatusCode());
-            throw new RuntimeException("Failed to fetch dossier: " + response.getStatusCode());
-        } catch (Exception e) {
-            log.error("Exception while fetching dossier for {}: {}. Error: {}", identifierType, identifier, e.getMessage());
-            throw new RuntimeException("Failed to fetch dossier content", e);
-        }
-    }
-
     public String fetchFIO_FL(String iin) {
         validateIin(iin);
         String sql = "SELECT SURNAME, FIRSTNAME, SECONDNAME FROM gbd_fl0205.person_info WHERE IIN = ?";
