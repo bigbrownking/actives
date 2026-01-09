@@ -114,15 +114,28 @@ public class Mapper {
     }
 
     public InformationRecordDt mapRowToInformation(ResultSet rs, int rowNum) throws SQLException {
-        return new InformationRecordDt(
-                rs.getString("iin_bin"),
-                rs.getObject("date", LocalDate.class),
-                rs.getString("database"),
-                rs.getString("aktivy"),
-                rs.getString("oper"),
-                rs.getString("dopinfo"),
-                rs.getString("summ")
-        );
+        try{
+            return new InformationRecordDt(
+                    rs.getString("iin_bin"),
+                    rs.getObject("date", LocalDate.class),
+                    rs.getString("database"),
+                    rs.getString("aktivy"),
+                    rs.getString("oper"),
+                    rs.getString("dopinfo"),
+                    rs.getString("summ")
+            );
+        } catch (Exception e){
+            return new InformationRecordDt(
+                    rs.getString("iin_bin"),
+                    rs.getObject("date", LocalDate.class),
+                    rs.getString("istochnik"),
+                    rs.getString("vid"),
+                    rs.getString("deitsvie"),
+                    rs.getString("dop_info"),
+                    rs.getString("summa")
+            );
+        }
+
 
     }
 

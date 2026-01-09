@@ -64,7 +64,7 @@ public class ExportController {
             @AuthenticationPrincipal UserDetailsImpl userDetails,
             @RequestBody MassExportRequest massExportRequest,
                            HttpServletResponse response) throws IOException, NotFoundException {
-        /*if(justificationService.store(
+        if(justificationService.store(
                 userDetails,
                 massExportRequest.getIins(),
                 massExportRequest.getOrderNum(),
@@ -79,9 +79,9 @@ public class ExportController {
                 massExportRequest.getTematikName(),
                 massExportRequest.getRukName(),
                 "Выгрузка профилей по иин: "
-        )) {*/
+        )) {
             generate_excel_header(massExportRequest, response);
             excelExportService.exportToExcelMass(response.getOutputStream(), massExportRequest);
-       // }
+        }
     }
 }

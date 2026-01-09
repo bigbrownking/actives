@@ -240,11 +240,11 @@ public class PortretService {
 
     private boolean fetchTurnover(String iin) {
         try {
-            String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Turnover_turnover.getPath(), iin);
+            String sql = sqlFileUtil.getSqlWithIin(QueryLocationDictionary.Turnover_turnoverFlag.getPath(), iin);
             List<String> turnovers = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("iin_bin"));
             return !turnovers.isEmpty();
         } catch (Exception e) {
-            log.error("Error fetching turnover data for IIN: {}", iin, e);
+            log.error("Error fetching turnoverBank.sql data for IIN: {}", iin, e);
             return false;
         }
     }

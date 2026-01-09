@@ -9,12 +9,7 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.info.infobaza.model.main.Log;
 import org.info.infobaza.repository.main.LogRepository;
-import org.info.infobaza.security.UserDetailsServiceImpl;
-import org.info.infobaza.util.convert.IinChecker;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;

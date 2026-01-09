@@ -431,7 +431,7 @@ public class PdfExportServiceImpl implements PdfExportService {
             log.debug("Added turnovers table");
         } else {
             document.add(new Paragraph("Нет информации о банковских счетах", bodyFont));
-            log.debug("No turnover records available");
+            log.debug("No turnoverBank.sql records available");
         }
     }
 

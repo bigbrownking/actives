@@ -9,6 +9,7 @@ import org.info.infobaza.service.ServiceMetadata;
 import org.info.infobaza.util.convert.Mapper;
 import org.info.infobaza.constants.QueryLocationDictionary;
 import org.info.infobaza.util.convert.SQLFileUtil;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +27,10 @@ public class NaoConService implements InformationalService {
     private final Mapper mapper;
 
 
+    @Cacheable(
+            value = "naoConHouse",
+            key = "#iin + '_' + #dateFrom + '_' + #dateTo"
+    )
     @ServiceMetadata(
             source = {"НАО ЦОН"},
             vids = {"Недвижимое имущество"},
@@ -56,32 +61,5 @@ public class NaoConService implements InformationalService {
             return jdbcTemplate.query(sql, mapper::mapRowToNaoCon);
         }
         return null;
-    }
-    public List<NaoConRecordDt> searchNaoByAddress(String city,
-                                          String district,
-                                          String street,
-                                          String house,
-                                          String apartment) {
-        StringBuilder query = new StringBuilder("""
-        SELECT *
-        FROM pfr_dashboard.active_table_2_1_tb
-        WHERE 1=1
-        """);
-        if (city != null && !city.isBlank())
-            query.append(" AND adress ILIKE '%").append("г. ").append(city.trim().replace("'", "''")).append("%'");
-        if (district != null && !district.isBlank())
-            query.append(" AND adress ILIKE '%").append("р-н ").append(district.trim().replace("'", "''")).append("%'");
-        if (street != null && !street.isBlank())
-            query.append(" AND adress ILIKE '%").append(street.trim().replace("'", "''")).append("%'");
-        if (house != null && !house.isBlank())
-            query.append(" AND adress ILIKE '%").append("д. ").append(house.trim().replace("'", "''")).append("%'");
-        if (apartment != null && !apartment.isBlank())
-            query.append(" AND adress ILIKE '%").append("кв. ").append(apartment.trim().replace("'", "''")).append("%'");
-
-        log.info("Final SQL query: {}", query);
-
-         List<NaoConRecordDt> recordDts = jdbcTemplate.query(query.toString(), mapper::mapRowToNaoCon);
-         log.info("Records size :{} ", recordDts.size());
-        return recordDts;
     }
 }

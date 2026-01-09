@@ -15,8 +15,8 @@ public class CacheEvictor {
 
     //@Scheduled(cron = "0 0 0 1 * ?")
     @Scheduled(cron = "0 0 */3 * * ?")
-    @CacheEvict(cacheNames = {"actives", "incomes", "yearCounts",
-             "activeCounts", "primaryRelations", "secondaryRelations"}, allEntries = true)
+    @CacheEvict(cacheNames = {"activeBySingleIin", "incomeBySingleIin", "yearCountActiveByIin","yearCountIncomeByIin",
+             "naoConHouse", "primaryRelations", "secondaryRelations"}, allEntries = true)
     public void evictMonthlyCaches() {
         log.info("Deleting old cache...");
     }

@@ -125,25 +125,25 @@ public class JwtTokenUtil {
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
-//    public String generateTokenFromUsername(String username) {
-//        Optional<org.info.infobaza.model.main.User> user = userMainRepository.findByUsername(username);
-//        if (user.isEmpty()) {
-//            log.error("User not found for username: {}", username);
-//            throw new IllegalArgumentException("User not found: " + username);
-//        }
-//
-//        Date now = new Date();
-//        Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
-//
-//        return Jwts.builder()
-//                .setHeader(header)
-//                .setSubject(username)
-//                .claim("user_id", user.get().getId())
-//                .claim("token_type", "access")
-//                .setIssuedAt(now)
-//                .setExpiration(expiryDate)
-//                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
-//                .compact();
-//    }
+    public String generateTokenFromUsername(String username) {
+        Optional<org.info.infobaza.model.main.User> user = userMainRepository.findByUsername(username);
+        if (user.isEmpty()) {
+            log.error("User not found for username: {}", username);
+            throw new IllegalArgumentException("User not found: " + username);
+        }
+
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
+
+        return Jwts.builder()
+                .setHeader(header)
+                .setSubject(username)
+                .claim("user_id", user.get().getId())
+                .claim("token_type", "access")
+                .setIssuedAt(now)
+                .setExpiration(expiryDate)
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
 
 }

@@ -27,24 +27,43 @@ public class FetcherFactory {
 
         // ==================== ESF SERVICE ====================
         fetchers.add(createESFFetcher(
-                new String[]{"Реализация", "Приобретение"},
+                new String[]{"Приобретение"},
                 "ESF",
                 new String[]{"Транспортные средства"},
-                QueryLocationDictionary.ESF_Транспортные_средства
+                QueryLocationDictionary.ESF_Транспортные_средства_приобретение
+        ));
+        fetchers.add(createESFFetcher(
+                new String[]{"Реализация"},
+                "ESF",
+                new String[]{"Транспортные средства"},
+                QueryLocationDictionary.ESF_Транспортные_средства_реализация
         ));
 
         fetchers.add(createESFFetcher(
-                new String[]{"Приобретение", "Реализация"},
+                new String[]{"Приобретение"},
                 "ESF",
                 new String[]{"Недвижимое имущество"},
-                QueryLocationDictionary.ESF_Недвижимое_имущество
+                QueryLocationDictionary.ESF_Недвижимое_имущество_приобретение
+        ));
+        fetchers.add(createESFFetcher(
+                new String[]{"Реализация"},
+                "ESF",
+                new String[]{"Недвижимое имущество"},
+                QueryLocationDictionary.ESF_Недвижимое_имущество_реализация
         ));
 
         fetchers.add(createESFFetcher(
-                new String[]{"Приобретение", "Реализация"},
+                new String[]{"Приобретение"},
                 "ESF",
                 new String[]{"Украшения и золото"},
-                QueryLocationDictionary.ESF_Украшения_и_золото
+                QueryLocationDictionary.ESF_Украшения_и_золото_приобретение
+        ));
+
+        fetchers.add(createESFFetcher(
+                new String[]{"Реализация"},
+                "ESF",
+                new String[]{"Украшения и золото"},
+                QueryLocationDictionary.ESF_Украшения_и_золото_реализация
         ));
 
         fetchers.add(createESFFetcher(
@@ -62,17 +81,31 @@ public class FetcherFactory {
         ));
 
         fetchers.add(createESFFetcher(
-                new String[]{"Реализация", "Приобретение"},
+                new String[]{"Приобретение"},
                 "ESF",
                 new String[]{"Животные"},
-                QueryLocationDictionary.ESF_Животные
+                QueryLocationDictionary.ESF_Животные_приобретение
         ));
 
         fetchers.add(createESFFetcher(
-                new String[]{"Приобретение", "Реализация"},
+                new String[]{"Реализация"},
+                "ESF",
+                new String[]{"Животные"},
+                QueryLocationDictionary.ESF_Животные_реализация
+        ));
+
+        fetchers.add(createESFFetcher(
+                new String[]{"Приобретение"},
                 "ESF",
                 new String[]{"Предметы исскуства"},
-                QueryLocationDictionary.ESF_Предметы_исскуства
+                QueryLocationDictionary.ESF_Предметы_исскуства_приобретение
+        ));
+
+        fetchers.add(createESFFetcher(
+                new String[]{"Реализация"},
+                "ESF",
+                new String[]{"Предметы исскуства"},
+                QueryLocationDictionary.ESF_Предметы_исскуства_реализация
         ));
 
         fetchers.add(createESFFetcher(
@@ -84,10 +117,17 @@ public class FetcherFactory {
 
         // ==================== EIAS SERVICE ====================
         fetchers.add(createESFFetcher(
-                new String[]{"Приобретение", "Реализация"},
+                new String[]{"Приобретение"},
                 "ЕИАС",
                 new String[]{"Недвижимое имущество"},
-                QueryLocationDictionary.ЕИАС_Недвижимое_имущество
+                QueryLocationDictionary.ЕИАС_Недвижимое_имущество_приобретение
+        ));
+
+        fetchers.add(createESFFetcher(
+                new String[]{"Реализация"},
+                "ЕИАС",
+                new String[]{"Недвижимое имущество"},
+                QueryLocationDictionary.ЕИАС_Недвижимое_имущество_реализация
         ));
 
         fetchers.add(createSimpleFetcher(
@@ -121,17 +161,31 @@ public class FetcherFactory {
         ));
 
         fetchers.add(createESFFetcher(
-                new String[]{"Приобретение", "Реализация"},
+                new String[]{"Приобретение"},
                 "ЕИАС",
                 new String[]{"Ценные бумаги"},
-                QueryLocationDictionary.ЕИАС_Ценные_бумаги
+                QueryLocationDictionary.ЕИАС_Ценные_бумаги_приобретение
         ));
 
         fetchers.add(createESFFetcher(
-                new String[]{"Приобретение", "Реализация", "Наличие"},
+                new String[]{"Реализация"},
+                "ЕИАС",
+                new String[]{"Ценные бумаги"},
+                QueryLocationDictionary.ЕИАС_Ценные_бумаги_реализация
+        ));
+
+        fetchers.add(createESFFetcher(
+                new String[]{"Приобретение"},
                 "ЕИАС",
                 new String[]{"Цифровые активы"},
-                QueryLocationDictionary.ЕИАС_Цифровые_активы
+                QueryLocationDictionary.ЕИАС_Цифровые_активы_приобретение
+        ));
+
+        fetchers.add(createESFFetcher(
+                new String[]{"Реализация"},
+                "ЕИАС",
+                new String[]{"Цифровые активы"},
+                QueryLocationDictionary.ЕИАС_Цифровые_активы_реализация
         ));
 
         // ==================== CULS SERVICE ====================
@@ -156,6 +210,29 @@ public class FetcherFactory {
                 "ЦУЛС",
                 new String[]{"Недвижимое имущество"},
                 QueryLocationDictionary.ЦУЛС_Недвижимое_имущество,
+                true, false
+        ));
+
+        // ==================== CRYPTO ====================
+        fetchers.add(createSimpleFetcher(
+                new String[]{"Приобретение"},
+                "Выписка банка",
+                new String[]{"Цифровые активы"},
+                QueryLocationDictionary.Turnover_turnoverBank,
+                true, false
+        ));
+        fetchers.add(createSimpleFetcher(
+                new String[]{"Приобретение"},
+                "Выписка биржи",
+                new String[]{"Цифровые активы"},
+                QueryLocationDictionary.Turnover_turnoverBirzh,
+                true, false
+        ));
+        fetchers.add(createSimpleFetcher(
+                new String[]{"Приобретение"},
+                "ФМ-1",
+                new String[]{"Цифровые активы"},
+                QueryLocationDictionary.Turnover_turnoverFM,
                 true, false
         ));
 
@@ -207,10 +284,18 @@ public class FetcherFactory {
 
         // ==================== FNO270 SERVICE ====================
         fetchers.add(createSimpleFetcher(
-                new String[]{"Приобретение", "Реализация"},
+                new String[]{"Приобретение"},
                 "FNO270",
                 new String[]{"Недвижимое имущество"},
-                QueryLocationDictionary.FNO270_Недвижимое_имущество,
+                QueryLocationDictionary.FNO270_Недвижимое_имущество_приобретение,
+                true, false
+        ));
+
+        fetchers.add(createSimpleFetcher(
+                new String[]{"Реализация"},
+                "FNO270",
+                new String[]{"Недвижимое имущество"},
+                QueryLocationDictionary.FNO270_Недвижимое_имущество_реализация,
                 true, false
         ));
 
@@ -343,10 +428,18 @@ public class FetcherFactory {
 
         // ==================== MCX SERVICE ====================
         fetchers.add(createSimpleFetcher(
-                new String[]{"Реализация", "Приобретение"},
+                new String[]{"Приобретение"},
                 "Сведения МСХ",
                 new String[]{"Спецтехника"},
-                QueryLocationDictionary.Сведения_МСХ_Спецтехника,
+                QueryLocationDictionary.Сведения_МСХ_Спецтехника_приобретение,
+                true, false
+        ));
+
+        fetchers.add(createSimpleFetcher(
+                new String[]{"Реализация"},
+                "Сведения МСХ",
+                new String[]{"Спецтехника"},
+                QueryLocationDictionary.Сведения_МСХ_Спецтехника_реализация,
                 true, false
         ));
 
@@ -399,8 +492,19 @@ public class FetcherFactory {
 
         // ==================== NAO CON SERVICE ====================
         fetchers.add(createNaoConFetcher(
-                new String[]{"Реализация", "Приобретение"},
-                new String[]{"Недвижимое имущество"}
+                new String[]{"Приобретение"},
+                "НАО ЦОН",
+                new String[]{"Недвижимое имущество"},
+                QueryLocationDictionary.НАО_ЦОН_Недвижимое_имущество_приобретение,
+                true, false
+        ));
+
+        fetchers.add(createNaoConFetcher(
+                new String[]{"Реализация"},
+                "НАО ЦОН",
+                new String[]{"Недвижимое имущество"},
+                QueryLocationDictionary.НАО_ЦОН_Недвижимое_имущество_реализация,
+                true, false
         ));
 
         return fetchers;
@@ -421,10 +525,11 @@ public class FetcherFactory {
         return new SimpleDataFetcher(jdbcTemplate, sqlFileUtil, mapper, config);
     }
 
-    private DataFetcher createNaoConFetcher(String[] types, String[] vids) {
-        FetcherConfig config = new FetcherConfig(types, "НАО ЦОН", vids,
-                QueryLocationDictionary.НАО_ЦОН_Недвижимое_имущество,
-                true, false, NaoConRecordDt.class);
+    private DataFetcher createNaoConFetcher(String[] types, String source, String[] vids,
+                                            QueryLocationDictionary queryPath,
+                                            boolean isActive, boolean isIncome){
+        FetcherConfig config = new FetcherConfig(types, source, vids, queryPath,
+                isActive, isIncome, InformationRecordDt.class);
         return new NaoConDataFetcher(jdbcTemplate, sqlFileUtil, mapper, config);
     }
 }

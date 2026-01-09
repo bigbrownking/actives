@@ -40,7 +40,7 @@ public class PortretController {
     public ResponseEntity<Person> getPortret(
             @AuthenticationPrincipal UserDetailsImpl userDetails,
             @RequestBody GetPortretRequest byIINRequest) throws IOException, NotFoundException {
-        /*if(justificationService.store(
+        if(justificationService.store(
                 userDetails,
                 Collections.singletonList(byIINRequest.getIin()),
                 byIINRequest.getOrderNum(),
@@ -54,11 +54,11 @@ public class PortretController {
                 byIINRequest.getSphereName(),
                 byIINRequest.getTematikName(),
                 byIINRequest.getRukName(),
-                "Поиск по иин: "
-        )){*/
+                "Поиск по иин/бин: "
+        )){
             return ResponseEntity.ok(portretService.getPerson(byIINRequest.getIin()));
-      /*  }
-        return null;*/
+        }
+        return null;
     }
 
     @LogRequest
@@ -67,7 +67,7 @@ public class PortretController {
     public ResponseEntity<CarResponse> getCarInfo(
             @AuthenticationPrincipal UserDetailsImpl userDetails,
             @RequestBody FindCarRequest request) throws IOException {
-        /*if(justificationService.store(
+        if(justificationService.store(
             userDetails,
             List.of(request.getVin(), request.getGrnz()),
             request.getOrderNum(),
@@ -82,10 +82,10 @@ public class PortretController {
             request.getTematikName(),
             request.getRukName(),
             "Поиск по параметрам автомобиля: "
-    )){*/
+    )){
         return ResponseEntity.ok(objectFinder.getCar(request));
-   /* }
-        return null;*/
+    }
+        return null;
     }
 
     @LogRequest
@@ -94,7 +94,7 @@ public class PortretController {
     public ResponseEntity<HousePortret> getHouseInfo(
             @AuthenticationPrincipal UserDetailsImpl userDetails,
             @RequestBody FindHouseRequest request) throws IOException {
-       /* if(justificationService.store(
+       if(justificationService.store(
                 userDetails,
                 List.of(request.getRka(), request.getKd()),
                 request.getOrderNum(),
@@ -109,9 +109,9 @@ public class PortretController {
                 request.getTematikName(),
                 request.getRukName(),
                 "Поиск по параметрам недвижимости: "
-        )){*/
+        )){
             return ResponseEntity.ok(objectFinder.getHouse(request));
-      /*  }
-        return null;*/
+        }
+        return null;
     }
 }

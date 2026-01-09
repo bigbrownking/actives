@@ -96,7 +96,7 @@ public class AuthController {
         }
     }
 
-   /* @PostMapping("/signup")
+   @PostMapping("/signup")
     public ResponseEntity<?> signUp(@RequestBody SignUpRequest request) {
         try {
             log.info("🧩 New signup attempt for email: {}", request.getEmail());
@@ -183,6 +183,6 @@ public class AuthController {
                     .body("Error during login: " + e.getMessage());
         }
     }
-*/
+
 
 }

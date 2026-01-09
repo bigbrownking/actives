@@ -28,6 +28,9 @@ public class Log {
     @Column(name = "obwii")
     private String obwii;
 
+    @Column(name = "ip_address")
+    private String ipAddress;
+
     @Column(name = "approvement_data")
     private String approvementData;
 

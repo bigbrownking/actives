@@ -123,11 +123,9 @@ public final class Dictionary {
         Set<String> activeVids = new HashSet<>();
         Set<String> incomeVids = new HashSet<>();
 
-        // Get all unique sources from the registry
         Map<String, List<DataFetcher>> allActiveFetchers = fetcherRegistry.getAllActiveFetchersBySource();
         Map<String, List<DataFetcher>> allIncomeFetchers = fetcherRegistry.getAllIncomeFetchersBySource();
 
-        // Collect active sources and their metadata
         for (Map.Entry<String, List<DataFetcher>> entry : allActiveFetchers.entrySet()) {
             activeSources.add(entry.getKey());
 
@@ -138,7 +136,6 @@ public final class Dictionary {
             }
         }
 
-        // Collect income sources and their metadata
         for (Map.Entry<String, List<DataFetcher>> entry : allIncomeFetchers.entrySet()) {
             incomeSources.add(entry.getKey());
 
@@ -148,7 +145,6 @@ public final class Dictionary {
             }
         }
 
-        // Store for static access
         incomeSourcesSet = new HashSet<>(incomeSources);
         activeSourcesSet = new HashSet<>(activeSources);
 

@@ -4,11 +4,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.model.main.Log;
 import org.info.infobaza.security.UserDetailsImpl;
+import org.info.infobaza.util.user.UserUtil;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.info.infobaza.util.user.UserUtil.getClientIpAddress;
+import static org.info.infobaza.util.user.UserUtil.getCurrentHttpRequest;
 
 @Slf4j
 @Service
@@ -82,6 +86,7 @@ public class JustificationService {
             Log logg = new Log();
             String obwii = activity + object;
             logg.setObwii(obwii);
+            logg.setIpAddress(getClientIpAddress(getCurrentHttpRequest()));
             String approvement_data = placeApprovementText(orderNum, approvement_type,
                     caseNum,
                     orderDate,
@@ -92,13 +97,12 @@ public class JustificationService {
                     sphereName,
                     tematikName,
                     rukName);
-            if(!userDetails.isAdmin() && approvement_data.isEmpty()){
+            if(userDetails!= null && !userDetails.isAdmin() && approvement_data.isEmpty()){
                 return false;
             }
             logg.setApprovementData(approvement_data);
-            LocalDateTime current = LocalDateTime.now();
-            logg.setUser(userDetails.getUserEntity());
-            logg.setDate(current);
+            logg.setUser(userDetails != null ? userDetails.getUserEntity() : null);
+            logg.setDate(LocalDateTime.now());
             logService.saveLog(logg);
             return true;
         } catch (Exception e) {

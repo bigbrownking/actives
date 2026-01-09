@@ -189,8 +189,8 @@ public class ENPFService implements InformationalService {
                 record.setEndDate(dateUtil.formatTimeToCustom(record.getEndDate()));
             });
         } catch (Exception e) {
-            log.error("Error fetching turnover records for IIN: {}", iin, e);
-            throw new IOException("Failed to fetch turnover records", e);
+            log.error("Error fetching turnoverBank.sql records for IIN: {}", iin, e);
+            throw new IOException("Failed to fetch turnoverBank.sql records", e);
         }
 
         return turnoverRecords.stream()
@@ -257,8 +257,8 @@ public class ENPFService implements InformationalService {
                 record.setEndDate(dateUtil.formatTimeToCustom(record.getEndDate()));
             });
         } catch (Exception e) {
-            log.error("Error fetching turnover records for IIN: {}", iin, e);
-            throw new IOException("Failed to fetch turnover records", e);
+            log.error("Error fetching turnoverBank.sql records for IIN: {}", iin, e);
+            throw new IOException("Failed to fetch turnoverBank.sql records", e);
         }
 
         return turnoverRecords;
