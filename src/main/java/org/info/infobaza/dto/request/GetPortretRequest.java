@@ -9,6 +9,12 @@ public class GetPortretRequest {
     @Loggable
     private String iin;
 
+    @Loggable
+    private String dateFrom;
+
+    @Loggable
+    private String dateTo;
+
     @Nullable
     @Loggable
     private String orderNum;

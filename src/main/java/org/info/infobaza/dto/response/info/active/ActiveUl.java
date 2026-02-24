@@ -11,33 +11,33 @@ import java.util.Map;
 @Getter
 @Setter
 @Builder
-public class ActiveCounts implements ActiveResponse {
+public class ActiveUl implements ActiveResponse {
     private String dateFrom;
     private String dateTo;
     private List<String> selectedYears;
     private List<ActiveCountGroup> aktivyTypeCounts;
     private Map<String, List<String>> iinToRelation;
 
-    // Pagination fields
-    private Long totalElements;
-    private Integer currentPage;
-    private Integer pageSize;
-    private Integer totalPages;
+    private int totalInfoRecords;
+    private int totalEsfRecords;
+    private long totalElements;
+    private int currentPage;
+    private int pageSize;
+    private int totalPages;
 
-    // Pagination helper methods
     public boolean hasNext() {
-        return currentPage != null && totalPages != null && currentPage < totalPages - 1;
+        return currentPage < totalPages - 1;
     }
 
     public boolean hasPrevious() {
-        return currentPage != null && currentPage > 0;
+        return currentPage > 0;
     }
 
     public boolean isFirst() {
-        return currentPage != null && currentPage == 0;
+        return currentPage == 0;
     }
 
     public boolean isLast() {
-        return currentPage != null && totalPages != null && currentPage >= totalPages - 1;
+        return currentPage >= totalPages - 1;
     }
 }

@@ -4,9 +4,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.info.infobaza.model.main.Role;
 import org.info.infobaza.model.main.User;
+import org.info.infobaza.model.ser.AccessSer;
 import org.info.infobaza.model.ser.UserSer;
 import org.info.infobaza.repository.main.RoleRepository;
 import org.info.infobaza.repository.main.UserRepository;
+import org.info.infobaza.repository.ser.AccessSerRepository;
 import org.info.infobaza.repository.ser.UserSerRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,7 @@ import java.util.*;
 @RequiredArgsConstructor
 public class UserConverter {
     private final UserRepository userRepository;
+    private final AccessSerRepository accessSerRepository;
     private final UserSerRepository userSerRepository;
     private final RoleRepository roleRepository;
     private final String email = "@afm.gov.kz";
@@ -87,7 +90,9 @@ public class UserConverter {
         if (userSer.getAccess() == null) {
             return true;
         }
-        boolean isValidStatus = userSer.getAccess().equals("FIRST_CATEGORY") || userSer.getAccess().equals("SECOND_CATEGORY");
+       // boolean isValidStatus = userSer.getAccess().equals("FIRST_CATEGORY") || userSer.getAccess().equals("SECOND_CATEGORY");
+        AccessSer access = accessSerRepository.findById(userSer.getId()).orElse(null);
+        boolean isValidStatus = access != null && access.isHasAccess();
         return !isValidStatus ||
                 (userSer.getPasswordExpDate().isBefore(LocalDateTime.now()) && userSer.getStatus().equals("DISABLED"));
     }

@@ -16,6 +16,7 @@ import org.info.infobaza.model.info.job.SupervisorRecord;
 import org.info.infobaza.model.info.person.PersonRecord;
 import org.info.infobaza.model.info.person.nominal.Nominal;
 import org.info.infobaza.model.info.person.nominal.NominalRucUchr;
+import org.info.infobaza.service.Analyzer;
 import org.info.infobaza.service.DossierService;
 import org.info.infobaza.service.enpf.HeadService;
 import org.info.infobaza.util.convert.Mapper;
@@ -49,19 +50,31 @@ public class PortretService {
     private HeadService headService;
     private final DossierService dossierService;
     private final NumberConverter numberConverter;
+    private Analyzer analyzer;
     private static final String IIN_PATTERN = "\\d{12}";
-
     @Autowired
     public void setHeadService(@Lazy HeadService headService) {
         this.headService = headService;
     }
 
+    @Autowired
+    public void setAnalyzer(@Lazy Analyzer analyzer){ this.analyzer = analyzer;}
     @Data
     private static class FetchResult {
         private String fullName;
         private Age age;
         private String photo;
         private String type;
+    }
+    public Person getPersonWithDates(String iin, String dateFrom, String dateTo) throws IOException {
+        Double totalActives = analyzer.calculateTotalActivesForPerson(iin, dateFrom, dateTo);
+        Double totalIncomes = analyzer.calculateTotalIncomeByIIN(iin, dateFrom, dateTo);
+        Person person = getPerson(iin);
+
+        person.setActives(numberConverter.formatNumber(totalActives));
+        person.setIncomes(numberConverter.formatNumber(totalIncomes));
+
+        return person;
     }
 
     public Person getPerson(String iin) throws IOException {
@@ -88,6 +101,7 @@ public class PortretService {
                 photo,
                 status,
                 turnover,
+                "0", "0",
                 nominal,
                 nominalUl
         );

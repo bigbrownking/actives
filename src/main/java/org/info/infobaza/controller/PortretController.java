@@ -56,7 +56,7 @@ public class PortretController {
                 byIINRequest.getRukName(),
                 "Поиск по иин/бин: "
         )){
-            return ResponseEntity.ok(portretService.getPerson(byIINRequest.getIin()));
+            return ResponseEntity.ok(portretService.getPersonWithDates(byIINRequest.getIin(), byIINRequest.getDateFrom(), byIINRequest.getDateTo()));
         }
         return null;
     }

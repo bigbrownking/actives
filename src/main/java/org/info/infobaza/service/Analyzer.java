@@ -62,7 +62,6 @@ public class Analyzer {
     private final SQLFileUtil sqlFileUtil;
     private final NumberConverter numberConverter;
     private final NaoConService naoConService;
-    private final FetcherRegistry fetcherRegistry;
     private final SingleCache singleCache;
     private final Map<String, String> iinToFioCache = new ConcurrentHashMap<>();
 
@@ -857,7 +856,7 @@ public class Analyzer {
         return type.isEmpty() ? Optional.empty() : Optional.of(type);
     }
 
-    public double calculateTotalIncomeByIIN(String iin, String dateFrom, String dateTo) {
+    public Double calculateTotalIncomeByIIN(String iin, String dateFrom, String dateTo) {
         List<InformationRecordDt> allInfoRecords = new ArrayList<>();
         Set<String> targetSources = Dictionary.getIncomeMethodsBySource().keySet();
 
@@ -966,8 +965,10 @@ public class Analyzer {
                     allNaoRecords.addAll(result.getNaoRecords());
                 }
 
-                sortRecordsByDatabase(allInfoRecords);
-                sortRecordsByDatabase(allEsfRecords);
+                sortRecordsByDatabase(allInfoRecords, true);
+                sortRecordsByDatabase(allEsfRecords, true);
+
+
             }
             case "Текущий" -> processNaoConCurrentMode(involvedIins, dateFrom, dateTo, allNaoRecords);
             case "Исторический" -> processNaoConHistoricalMode(involvedIins, dateFrom, dateTo, allNaoRecords);
@@ -980,8 +981,8 @@ public class Analyzer {
                     allEsfRecords.addAll(result.getEsfRecords());
                     allNaoRecords.addAll(result.getNaoRecords());
                 }
-                sortRecordsByDatabase(allInfoRecords);
-                sortRecordsByDatabase(allEsfRecords);
+                sortRecordsByDatabase(allInfoRecords, true);
+                sortRecordsByDatabase(allEsfRecords, true);
             }
         }
 
@@ -996,13 +997,154 @@ public class Analyzer {
         return activeResult;
     }
 
-    private <T extends RecordDt> void sortRecordsByDatabase(List<T> records) {
+    public ActiveResponse getAllActiveUlOfPersonsByDates(
+            String iin, String dateFrom, String dateTo,
+            List<String> years, List<String> vids,
+            List<String> types, List<String> sourcesList,
+            List<String> iins, int page, int size) {
+
+        // Validate pagination parameters
+        if (page < 0) {
+            page = 0;
+        }
+        if (size <= 0) {
+            size = 10; // default page size
+        }
+
+        Map<String, List<String>> filteredIinToRelation = populateIinToRelation(iin, iins);
+
+        List<String> involvedIins = buildInvolvedIins(iin, iins);
+
+        Set<String> targetSources = sourcesList != null && !sourcesList.isEmpty()
+                ? new HashSet<>(sourcesList)
+                : Dictionary.getActiveMethodsBySource().keySet();
+
+        List<InformationRecordDt> allInfoRecords = new ArrayList<>();
+        List<ESFInformationRecordDt> allEsfRecords = new ArrayList<>();
+
+        for (String currentIin : involvedIins) {
+            SingleIinActiveResult result = singleCache.fetchActiveForSingleIin(
+                    currentIin,
+                    dateFrom,
+                    dateTo,
+                    years,
+                    vids,
+                    types,
+                    targetSources
+            );
+
+            allInfoRecords.addAll(result.getInfoRecords());
+            allEsfRecords.addAll(result.getEsfRecords());
+        }
+
+        // Filter for КГД records only
+        allInfoRecords = allInfoRecords.stream()
+                .filter(r -> "Сведения КГД МФ РК".equals(r.getDatabase()))
+                .collect(Collectors.toList());
+
+        allEsfRecords = allEsfRecords.stream()
+                .filter(r -> "Сведения КГД МФ РК".equals(r.getDatabase()))
+                .collect(Collectors.toList());
+
+        sortRecordsByDatabase(allInfoRecords, false);
+        sortRecordsByDatabase(allEsfRecords, false);
+
+        List<InformationRecordDt> distinctInfo = keepDistinctInfo(allInfoRecords);
+        List<ESFInformationRecordDt> distinctEsf = keepDistinctEsf(allEsfRecords);
+
+        // Combine all records and convert to UlRecordDt with extracted company names
+        List<UlRecordDt> allUlRecords = new ArrayList<>();
+        allUlRecords.addAll(convertToUlRecords(distinctInfo));
+        allUlRecords.addAll(convertToUlRecords(distinctEsf));
+
+        // Store total count before pagination
+        long totalElements = allUlRecords.size();
+
+        // Apply pagination
+        List<UlRecordDt> paginatedRecords = paginateRecords(allUlRecords, page, size);
+
+        // Create single ActiveCountGroup with paginated records
+        List<ActiveCountGroup> groups = new ArrayList<>();
+        if (!paginatedRecords.isEmpty()) {
+            ActiveCountGroup group = ActiveCountGroup.builder()
+                    .database("Сведения КГД МФ РК")
+                    .aktivy("ЮЛ")
+                    .type(null) // No type for parent group
+                    .count((int) totalElements)
+                    .records(new ArrayList<>(paginatedRecords)) // Cast to List<RecordDt>
+                    .build();
+            groups.add(group);
+        }
+
+        // Build response
+        return ActiveUl.builder()
+                .dateFrom(dateFrom)
+                .dateTo(dateTo)
+                .selectedYears(years)
+                .aktivyTypeCounts(groups)
+                .iinToRelation(filteredIinToRelation)
+                .totalInfoRecords(distinctInfo.size())
+                .totalEsfRecords(distinctEsf.size())
+                .totalElements(totalElements)
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(calculateTotalPages(totalElements, size))
+                .build();
+    }
+
+    private <T extends RecordDt> List<UlRecordDt> convertToUlRecords(List<T> records) {
+        return records.stream()
+                .map(record -> {
+                    String companyName = extractTypeFromDopinfo(record.getAktivy(), record.getDopinfo());
+
+                    return UlRecordDt.builder()
+                            .iin_bin(record.getIin_bin())
+                            .type(companyName)
+                            .name(record.getName())
+                            .date(record.getDate())
+                            .database(record.getDatabase())
+                            .aktivy(record.getAktivy())
+                            .oper(record.getOper())
+                            .dopinfo(record.getDopinfo())
+                            .summ(record.getSumm())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    // Helper method to paginate records
+    private <T> List<T> paginateRecords(List<T> records, int page, int size) {
+        if (records == null || records.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        int start = page * size;
+        int end = Math.min(start + size, records.size());
+
+        // If start index is beyond the list size, return empty list
+        if (start >= records.size()) {
+            return new ArrayList<>();
+        }
+
+        return new ArrayList<>(records.subList(start, end));
+    }
+
+    // Helper method to calculate total pages
+    private int calculateTotalPages(long totalElements, int size) {
+        if (size <= 0) {
+            return 0;
+        }
+        return (int) Math.ceil((double) totalElements / size);
+    }
+
+    private <T extends RecordDt> void sortRecordsByDatabase(List<T> records, boolean ul) {
         if (records == null || records.isEmpty()) {
             return;
         }
 
         Map<String, List<T>> grouped = records.stream()
                 .filter(r -> r.getDatabase() != null)
+                .filter(r -> !ul || !r.getDatabase().equals("Сведения КГД МФ РК"))
                 .collect(Collectors.groupingBy(RecordDt::getDatabase));
 
         records.clear();
@@ -1011,7 +1153,6 @@ public class Analyzer {
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> records.addAll(entry.getValue()));
     }
-
     private void processNaoConCurrentMode(List<String> involvedIins, String dateFrom, String dateTo,
                                           List<NaoConRecordDt> allNaoRecords) {
         for (String currentIin : involvedIins) {

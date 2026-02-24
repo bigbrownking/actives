@@ -25,7 +25,6 @@ public class InformationController {
 
     @LogRequest
     @PostMapping("/active")
-    //@Cacheable(value = "active", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<ActiveResponse> getAllActivesOfPerson(@RequestBody RelativesActiveRequest request) {
         ActiveResponse activeResponse = analyzer.getAllActivesOfPersonsByDates(
                 request.getIin(),
@@ -43,7 +42,6 @@ public class InformationController {
 
     @LogRequest
     @PostMapping("/activeCounts")
-    //@Cacheable(value = "activeCounts", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<ActiveResponse> getAllActiveCountsOfPerson(@RequestBody RelativesActiveRequest request,
                                                                      @RequestParam(value = "button", required = false) String button) {
         ActiveResponse activeResponse = analyzer.getAllActiveCountsOfPersonsByDates(
@@ -62,8 +60,27 @@ public class InformationController {
     }
 
     @LogRequest
+    @PostMapping("/activeUl")
+    public ResponseEntity<ActiveResponse> getAllActiveUlOfPerson(@RequestBody RelativesActiveRequest request,
+                                                                 @RequestParam(defaultValue = "0") int page,
+                                                                 @RequestParam(defaultValue = "10") int size){
+        ActiveResponse activeResponse = analyzer.getAllActiveUlOfPersonsByDates(
+                request.getIin(),
+                request.getDateFrom().toString(),
+                request.getDateTo().toString(),
+                request.getYears(),
+                request.getVids(),
+                request.getTypes(),
+                request.getSources(),
+                request.getIins(),
+                page, size
+        );
+
+        return ResponseEntity.ok(activeResponse);
+    }
+
+    @LogRequest
     @PostMapping("/income")
-   // @Cacheable(value = "income", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<IncomeResponse> getAllIncomesOfPerson(@RequestBody RelativesIncomeRequest request) {
         IncomeResponse incomeResponse = analyzer.getAllIncomesOfPersonsByDates(
                 request.getIin(),
@@ -80,7 +97,6 @@ public class InformationController {
 
     @LogRequest
     @PostMapping("/yearCount")
-    //@Cacheable(value = "yearCounts", keyGenerator = "requestKeyGenerator")
     public ResponseEntity<YearlyRecordCounts> getYearlyRecordCounts(@RequestBody RelativesActiveRequest request) {
         return ResponseEntity.ok(analyzer.getYearlyRecordCounts(
                 request.getIin(),

@@ -62,8 +62,8 @@ public class WebConfig {
                         .requestMatchers("/info/typesActive").permitAll()
                         .requestMatchers("/info/vidActive").permitAll()
                         .requestMatchers("/auth/fetchTokenCookieAndGetAccess").permitAll()
-                        .requestMatchers(new CustomRequestMatcher("http://192.168.30.153:3000")).permitAll()
-                        .anyRequest().permitAll()
+                   //     .requestMatchers(new CustomRequestMatcher("http://192.168.30.153:3000")).permitAll()
+                        .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);

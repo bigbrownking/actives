@@ -45,7 +45,7 @@ public class AuthController {
             if (refreshToken == null || refreshToken.isEmpty()) {
                 return ResponseEntity.badRequest().body("Refresh token not found in cookies");
             }
-            String refreshUrl = "https://ser.afm.gov.kz/kfm_new/api/v1/auth/refresh-access-token ";
+            String refreshUrl = "https://ser.afm.gov.kz/kfm_new/api/v1/auth/refresh-access-token";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

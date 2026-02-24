@@ -24,7 +24,6 @@ public class ESFInformationRecordDt implements RecordDt {
     private String num_doc;
     private String nomer;
     private String summ;
-
     public ESFInformationRecordDt(String iin_bin, String iin_bin_pokup, String iin_bin_prod, LocalDate date, String database, String aktivy, String oper, String dopinfo, String num_doc, String summ) {
         this.iin_bin = iin_bin;
         this.iin_bin_pokup = iin_bin_pokup;
