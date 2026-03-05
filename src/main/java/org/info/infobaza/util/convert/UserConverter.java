@@ -87,9 +87,6 @@ public class UserConverter {
     }
 
     private boolean isInvalidUser(UserSer userSer) {
-        if (userSer.getAccess() == null) {
-            return true;
-        }
        // boolean isValidStatus = userSer.getAccess().equals("FIRST_CATEGORY") || userSer.getAccess().equals("SECOND_CATEGORY");
         AccessSer access = accessSerRepository.findById(userSer.getId()).orElse(null);
         boolean isValidStatus = access != null && access.isHasAccess();
